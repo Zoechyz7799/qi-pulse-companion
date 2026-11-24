@@ -14,6 +14,8 @@ export const PRESETS = [
 
 export const DEFAULT_PRESET_ID = "25";
 
+export const ENCOURAGEMENT_MS = 3500;
+
 export const ENCOURAGEMENTS = {
   zh: [
     "你做得很好，繼續保持！",
@@ -24,16 +26,18 @@ export const ENCOURAGEMENTS = {
     "你已經很棒了，繼續加油！",
     "堅持下去，改變正在發生。",
     "你的努力正在被看見。",
+    "你就是自己的太陽，照亮著一切。",
   ],
   en: [
-    "You are doing well. Keep going.",
+    "You're doing great, keep it up!",
     "Every practice is progress.",
-    "Go gently. You are getting better.",
-    "Today you are stronger than yesterday.",
-    "Breathe, and feel this quiet moment.",
-    "You are already doing great. Keep on.",
-    "Stay with it. Change is happening.",
+    "Take it slow, you're getting better.",
+    "Today's you is stronger than yesterday's.",
+    "Take a deep breath, feel the calm of this moment.",
+    "You're already amazing, keep going!",
+    "Keep going, change is happening.",
     "Your effort is being seen.",
+    "You are your own sun, illuminating everything.",
   ],
 };
 
@@ -55,10 +59,8 @@ const COPY = {
     dismiss: "知道了",
     running: "陪著",
     alertShort: "時間到",
-    bubble: "這一輪滿了。起來活動一下。",
     notifyTitle: "時間到",
-    notifyBody: "時間到了。起來動一動。",
-    hint: "雙擊看山，立刻提醒",
+    hint: "雙擊看山，看一句鼓勵",
     petLabel: "劉看山。雙擊可立刻提醒。",
     presetsLabel: "時長",
     langLabel: "語言",
@@ -74,11 +76,8 @@ const COPY = {
     dismiss: "Got it",
     running: "With you",
     alertShort: "Time",
-    bubble: "This round is full. Stand up and loosen your shoulders.",
-    speak: "Time is up. Stand up and stretch.",
     notifyTitle: "Time",
-    notifyBody: "Time is up. Stand up and stretch.",
-    hint: "Double-click Kanshan to alert",
+    hint: "Double-click Kanshan for a kind word",
     petLabel: "Kanshan. Double-click to alert now.",
     presetsLabel: "Length",
     langLabel: "Language",

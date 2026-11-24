@@ -2,6 +2,7 @@ import { createPoseWorker } from "./pose-worker.js";
 import {
   DEFAULT_PRESET_ID,
   ENCOURAGEMENTS,
+  ENCOURAGEMENT_MS,
   PHASE,
   getCopy,
   pickEncouragement,
@@ -13,11 +14,10 @@ import { createTracker, formatClock } from "./tracker.js";
 const clockEl = document.querySelector("#clock");
 const statusEl = document.querySelector("#status");
 const hintEl = document.querySelector("#hint");
-const bubbleEl = document.querySelector("#bubble");
-const bubbleText = document.querySelector("#bubble-text");
+const encourageEl = document.querySelector("#encourage");
+const encourageText = document.querySelector("#encourage-text");
 const primaryEl = document.querySelector("#primary");
 const presetsEl = document.querySelector("#presets");
-const titleEl = document.querySelector("#app-title");
 const petEl = document.querySelector("#pet");
 const langZh = document.querySelector("#lang-zh");
 const langEn = document.querySelector("#lang-en");
@@ -29,10 +29,12 @@ const LINE_KEY = "qimai-line";
 
 let lang = loadLang();
 let line = "";
+let boxOpen = false;
 let selectedId = DEFAULT_PRESET_ID;
 let deadlineTimer = 0;
 let flashTimer = 0;
 let flashOn = false;
+let hideTimer = 0;
 
 tracker.arm(presetById(selectedId));
 
@@ -74,6 +76,7 @@ primaryEl.addEventListener("click", () => {
   clearTimeout(deadlineTimer);
   const dismissed = tracker.dismiss();
   quietAlert();
+  hideEncouragement();
   render(dismissed.state);
 });
 
@@ -99,7 +102,6 @@ window.addEventListener("pagehide", () => {
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 });
 
-refreshLine();
 applyLanguage();
 render(tracker.getState());
 
@@ -116,15 +118,10 @@ function sync(at = Date.now()) {
 function render(state) {
   const copy = getCopy(lang);
   clockEl.textContent = formatClock(state.displayMs);
-  titleEl.textContent = line;
   hintEl.textContent = copy.hint;
   hintEl.hidden = state.phase !== PHASE.idle;
   statusEl.textContent =
     state.phase === PHASE.running ? copy.running : state.phase === PHASE.alert ? copy.alertShort : "";
-
-  if (state.phase === PHASE.alert) bubbleText.textContent = copy.bubble;
-  else bubbleText.textContent = "";
-  bubbleEl.classList.toggle("is-on", state.phase === PHASE.alert);
 
   primaryEl.textContent =
     state.phase === PHASE.running ? copy.stop : state.phase === PHASE.alert ? copy.dismiss : copy.start;
@@ -140,26 +137,21 @@ function render(state) {
   pose.setPhase(state.phase);
   pose.setLabel(copy.petLabel);
 
-  if (state.phase === PHASE.running) {
-    document.title = formatClock(state.displayMs);
-  } else if (state.phase === PHASE.idle && !flashTimer) {
-    document.title = line;
-  }
+  if (!flashTimer) document.title = formatClock(state.displayMs);
 }
 
 function raiseAlert() {
   const copy = getCopy(lang);
   pose.replayAlert();
   startFlash(copy);
-  if (lang === "en") speak(copy.speak);
-  else if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  notify(copy);
+  const spoken = showEncouragement();
+  notify(copy, spoken);
 }
 
 function quietAlert() {
   stopFlash();
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  document.title = line;
+  document.title = formatClock(tracker.getState().displayMs);
 }
 
 function armDeadline(state) {
@@ -173,7 +165,7 @@ function startFlash(copy) {
   if (flashTimer) return;
   const paint = () => {
     flashOn = !flashOn;
-    document.title = flashOn ? copy.tabFlash : line;
+    document.title = flashOn ? copy.tabFlash : formatClock(tracker.getState().displayMs);
   };
   paint();
   flashTimer = window.setInterval(paint, 900);
@@ -194,21 +186,19 @@ function setLang(next) {
   } catch {
     /* private mode */
   }
-  refreshLine();
   applyLanguage();
   if (wasAlert && flashTimer) {
     stopFlash();
     startFlash(getCopy(lang));
   }
   render(tracker.getState());
-  if (wasAlert && lang === "en") speak(getCopy(lang).speak);
-  if (lang === "zh" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (boxOpen) showEncouragement();
+  else if (lang === "zh" && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
 function applyLanguage() {
   const copy = getCopy(lang);
   document.documentElement.lang = lang === "en" ? "en" : "zh-Hant";
-  document.title = line;
   langZh.setAttribute("aria-pressed", lang === "zh" ? "true" : "false");
   langEn.setAttribute("aria-pressed", lang === "en" ? "true" : "false");
   presetsEl.setAttribute("aria-label", copy.presetsLabel);
@@ -231,7 +221,27 @@ function refreshLine() {
   } catch {
     /* private mode */
   }
-  titleEl.textContent = line;
+}
+
+function showEncouragement() {
+  refreshLine();
+  encourageText.textContent = line;
+  encourageEl.classList.add("is-on");
+  encourageEl.setAttribute("aria-hidden", "false");
+  boxOpen = true;
+  clearTimeout(hideTimer);
+  hideTimer = window.setTimeout(hideEncouragement, ENCOURAGEMENT_MS);
+  if (lang === "en") speak(line);
+  else if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  return line;
+}
+
+function hideEncouragement() {
+  clearTimeout(hideTimer);
+  hideTimer = 0;
+  boxOpen = false;
+  encourageEl.classList.remove("is-on");
+  encourageEl.setAttribute("aria-hidden", "true");
 }
 
 function loadLang() {
@@ -271,12 +281,12 @@ function warmNotify() {
   Notification.requestPermission().catch(() => {});
 }
 
-function notify(copy) {
+function notify(copy, body) {
   if (!("Notification" in window)) return;
   const show = () => {
     if (Notification.permission !== "granted") return;
     try {
-      new Notification(copy.notifyTitle, { body: copy.notifyBody, silent: true });
+      new Notification(copy.notifyTitle, { body, silent: true });
     } catch {
       /* constructor can reject when the page is hidden */
     }

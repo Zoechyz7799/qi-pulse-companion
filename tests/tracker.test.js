@@ -4,7 +4,10 @@ import { ENCOURAGEMENTS, PRESETS, pickEncouragement, presetById } from "../src/t
 import { createTracker, formatClock } from "../src/tracker.js";
 
 test("encouragements avoid repeating the line that is already showing", () => {
-  assert.equal(ENCOURAGEMENTS.zh.length, 8);
+  assert.equal(ENCOURAGEMENTS.zh.length, 9);
+  assert.equal(ENCOURAGEMENTS.en.length, 9);
+  assert.equal(ENCOURAGEMENTS.zh.at(-1), "你就是自己的太陽，照亮著一切。");
+  assert.equal(ENCOURAGEMENTS.en.at(-1), "You are your own sun, illuminating everything.");
   assert.equal(
     pickEncouragement(ENCOURAGEMENTS.zh, "你做得很好，繼續保持！", () => 0),
     "每一次練習都是進步。",
