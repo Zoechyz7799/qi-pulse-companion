@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PRESETS, presetById } from "../src/tracking-config.js";
+import { ENCOURAGEMENTS, PRESETS, pickEncouragement, presetById } from "../src/tracking-config.js";
 import { createTracker, formatClock } from "../src/tracker.js";
+
+test("encouragements avoid repeating the line that is already showing", () => {
+  assert.equal(ENCOURAGEMENTS.zh.length, 8);
+  assert.equal(
+    pickEncouragement(ENCOURAGEMENTS.zh, "你做得很好，繼續保持！", () => 0),
+    "每一次練習都是進步。",
+  );
+  assert.equal(pickEncouragement(["只有一句"], "只有一句", () => 0.9), "只有一句");
+});
 
 test("presets include 25 min, 45 min, and a 10 second demo", () => {
   assert.equal(presetById("25").ms, 25 * 60 * 1000);

@@ -1,8 +1,10 @@
 import { createPoseWorker } from "./pose-worker.js";
 import {
   DEFAULT_PRESET_ID,
+  ENCOURAGEMENTS,
   PHASE,
   getCopy,
+  pickEncouragement,
   presetById,
   PRESETS,
 } from "./tracking-config.js";
@@ -23,7 +25,10 @@ const langEn = document.querySelector("#lang-en");
 const tracker = createTracker();
 const pose = createPoseWorker(petEl);
 
+const LINE_KEY = "qimai-line";
+
 let lang = loadLang();
+let line = "";
 let selectedId = DEFAULT_PRESET_ID;
 let deadlineTimer = 0;
 let flashTimer = 0;
@@ -94,6 +99,7 @@ window.addEventListener("pagehide", () => {
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 });
 
+refreshLine();
 applyLanguage();
 render(tracker.getState());
 
@@ -110,7 +116,7 @@ function sync(at = Date.now()) {
 function render(state) {
   const copy = getCopy(lang);
   clockEl.textContent = formatClock(state.displayMs);
-  titleEl.textContent = copy.title;
+  titleEl.textContent = line;
   hintEl.textContent = copy.hint;
   hintEl.hidden = state.phase !== PHASE.idle;
   statusEl.textContent =
@@ -135,9 +141,9 @@ function render(state) {
   pose.setLabel(copy.petLabel);
 
   if (state.phase === PHASE.running) {
-    document.title = `${formatClock(state.displayMs)} · ${copy.title}`;
-  } else if (state.phase === PHASE.idle) {
-    document.title = copy.title;
+    document.title = formatClock(state.displayMs);
+  } else if (state.phase === PHASE.idle && !flashTimer) {
+    document.title = line;
   }
 }
 
@@ -153,7 +159,7 @@ function raiseAlert() {
 function quietAlert() {
   stopFlash();
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  document.title = getCopy(lang).title;
+  document.title = line;
 }
 
 function armDeadline(state) {
@@ -167,7 +173,7 @@ function startFlash(copy) {
   if (flashTimer) return;
   const paint = () => {
     flashOn = !flashOn;
-    document.title = flashOn ? copy.tabFlash : copy.title;
+    document.title = flashOn ? copy.tabFlash : line;
   };
   paint();
   flashTimer = window.setInterval(paint, 900);
@@ -188,6 +194,7 @@ function setLang(next) {
   } catch {
     /* private mode */
   }
+  refreshLine();
   applyLanguage();
   if (wasAlert && flashTimer) {
     stopFlash();
@@ -201,13 +208,30 @@ function setLang(next) {
 function applyLanguage() {
   const copy = getCopy(lang);
   document.documentElement.lang = lang === "en" ? "en" : "zh-Hant";
-  document.title = copy.title;
+  document.title = line;
   langZh.setAttribute("aria-pressed", lang === "zh" ? "true" : "false");
   langEn.setAttribute("aria-pressed", lang === "en" ? "true" : "false");
   presetsEl.setAttribute("aria-label", copy.presetsLabel);
   document.querySelector(".lang").setAttribute("aria-label", copy.langLabel);
   const noscript = document.querySelector(".noscript");
   if (noscript) noscript.textContent = copy.noscript;
+}
+
+function refreshLine() {
+  const lines = ENCOURAGEMENTS[lang] ?? ENCOURAGEMENTS.zh;
+  let previous = "";
+  try {
+    previous = sessionStorage.getItem(LINE_KEY) || "";
+  } catch {
+    previous = line;
+  }
+  line = pickEncouragement(lines, previous);
+  try {
+    sessionStorage.setItem(LINE_KEY, line);
+  } catch {
+    /* private mode */
+  }
+  titleEl.textContent = line;
 }
 
 function loadLang() {
