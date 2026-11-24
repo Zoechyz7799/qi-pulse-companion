@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 460">
+  
+  <defs>
+    <radialGradient id="fur" cx="36%" cy="30%" r="72%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="62%" stop-color="#f4f4f2"/>
+      <stop offset="100%" stop-color="#e4e4e0"/>
+    </radialGradient>
+    <radialGradient id="nose" cx="34%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#5a5a5a"/>
+      <stop offset="42%" stop-color="#1c1c1c"/>
+      <stop offset="100%" stop-color="#070707"/>
+    </radialGradient>
+    <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f7f8fa"/>
+      <stop offset="100%" stop-color="#d5dae2"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="180" cy="424" rx="78" ry="11" fill="#1c1915" opacity="0.12"/>
+  <ellipse cx="72" cy="328" rx="26" ry="24" fill="url(#fur)"/>
+  
+  <path d="M150 178 C146 124 128 86 148 74 C166 86 174 128 170 178 Z" fill="url(#fur)"/>
+  <path d="M186 172 C208 120 242 82 258 94 C260 116 226 146 204 176 Z" fill="url(#fur)"/>
+  
+  <path d="M96 292
+           C86 196 112 132 168 128
+           C230 122 286 186 274 292
+           C264 392 112 404 96 292 Z" fill="url(#fur)"/>
+  <ellipse cx="142" cy="210" rx="34" ry="20" fill="#ffffff" opacity="0.5"/>
+  <circle cx="214" cy="196" r="7.5" fill="#161616"/>
+  <circle cx="274" cy="206" r="42" fill="url(#nose)"/>
+  <ellipse cx="256" cy="190" rx="14" ry="9" fill="#ffffff" opacity="0.4"/>
+  <path d="M118 268 C100 304 102 348 120 362" fill="none" stroke="#161616" stroke-width="16" stroke-linecap="round"/>
+  <path d="M228 274 C246 308 242 346 224 360" fill="none" stroke="#161616" stroke-width="16" stroke-linecap="round"/>
+  
+  <circle cx="122" cy="370" r="11" fill="#161616"/>
+  <circle cx="220" cy="368" r="11" fill="#161616"/>
+  
+  <ellipse cx="146" cy="400" rx="24" ry="13" fill="#161616"/>
+  <ellipse cx="210" cy="404" rx="26" ry="13" fill="#161616"/>
+</svg>
