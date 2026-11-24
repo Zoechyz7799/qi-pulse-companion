@@ -1,26 +1,24 @@
 /**
- * Pet poses, image swaps, and motion.
- * Knows which picture to show for a phase. Does not know durations.
+ * Pet clips. Switches Liu Kanshan's animations. Does not know durations.
  */
 
 import { PHASE } from "./tracking-config.js";
 
-const SEQUENCES = {
-  [PHASE.idle]: [
-    { file: "idle-stand.svg", hold: 2600 },
-    { file: "idle-blink.svg", hold: 140, cut: true },
-    { file: "idle-stand.svg", hold: 2200, cut: true },
-    { file: "idle-soft.svg", hold: 2400 },
-    { file: "idle-blink.svg", hold: 140, cut: true },
-  ],
-  [PHASE.running]: [
-    { file: "work-1.svg", hold: 460 },
-    { file: "work-2.svg", hold: 420 },
-    { file: "work-3.svg", hold: 400 },
-    { file: "work-2.svg", hold: 380 },
-  ],
-  [PHASE.alert]: [{ file: "alert-wave.svg", hold: 0 }],
+const CLIPS = {
+  idle: "idle.webp",
+  sway: "sway.webp",
+  sleep: "sleep.webp",
+  ball: "ball.webp",
+  laptop: "laptop.webp",
+  wave: "wave.webp",
 };
+
+const IDLE_CYCLE = [
+  { clip: "idle", hold: 2600 },
+  { clip: "sway", hold: 2600 },
+  { clip: "sleep", hold: 2800 },
+  { clip: "ball", hold: 2600 },
+];
 
 function poseUrl(file) {
   const base = import.meta.env.BASE_URL ?? "./";
@@ -28,85 +26,86 @@ function poseUrl(file) {
 }
 
 export function createPoseWorker(rig) {
-  const images = [...rig.querySelectorAll(".pet-img")];
+  const image = rig.querySelector(".pet-img");
   let phase = PHASE.idle;
-  let frameIndex = 0;
-  let shown = images.findIndex((img) => img.classList.contains("is-on"));
-  if (shown < 0) shown = 0;
-  let timer = 0;
+  let idleIndex = 0;
+  let idleTimer = 0;
+  let momentTimer = 0;
   let entered = false;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  for (const sequence of Object.values(SEQUENCES)) {
-    for (const frame of sequence) {
-      const preload = new Image();
-      preload.src = poseUrl(frame.file);
-    }
+  for (const file of Object.values(CLIPS)) {
+    const preload = new Image();
+    preload.src = poseUrl(file);
   }
 
-  function showFrame(forceCut = false) {
-    const sequence = SEQUENCES[phase];
-    const frame = sequence[frameIndex % sequence.length];
-    const src = poseUrl(frame.file);
-    const current = images[shown];
-    if (current.getAttribute("src") === src && current.classList.contains("is-on")) return;
-    const cut = forceCut || frame.cut;
-    if (cut) rig.classList.add("is-cut");
-    const nextIndex = shown ^ 1;
-    const next = images[nextIndex];
-    next.src = src;
-    next.classList.add("is-on");
-    current.classList.remove("is-on");
-    shown = nextIndex;
-    if (cut) {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => rig.classList.remove("is-cut"));
-      });
-    }
+  function showClip(name) {
+    const src = poseUrl(CLIPS[name]);
+    if (image.getAttribute("src") === src) return;
+    image.src = src;
   }
 
-  function schedule() {
-    window.clearTimeout(timer);
-    const sequence = SEQUENCES[phase];
-    const frame = sequence[frameIndex % sequence.length];
-    if (!frame || sequence.length < 2 || frame.hold <= 0) return;
-    timer = window.setTimeout(() => {
-      frameIndex = (frameIndex + 1) % sequence.length;
-      showFrame();
-      schedule();
-    }, frame.hold);
+  function stopIdle() {
+    window.clearTimeout(idleTimer);
+    idleTimer = 0;
   }
 
-  function updateMotion(forcePeek) {
+  function runIdle() {
+    stopIdle();
+    if (phase !== PHASE.idle || momentTimer) return;
+    const step = IDLE_CYCLE[idleIndex % IDLE_CYCLE.length];
+    showClip(step.clip);
+    idleTimer = window.setTimeout(() => {
+      idleIndex = (idleIndex + 1) % IDLE_CYCLE.length;
+      runIdle();
+    }, step.hold);
+  }
+
+  function applyPhase() {
     rig.dataset.phase = phase;
-    if (phase !== PHASE.idle) rig.classList.remove("is-floating");
-    if (phase === PHASE.alert) {
-      if (forcePeek) {
-        rig.classList.remove("is-peek");
-        void rig.offsetWidth;
-      }
-      rig.classList.add("is-peek");
+    if (momentTimer) return;
+    if (phase === PHASE.running) {
+      stopIdle();
+      rig.classList.remove("is-floating");
+      showClip("laptop");
       return;
     }
-    rig.classList.remove("is-peek");
-    if (phase === PHASE.idle && (entered || reduce)) rig.classList.add("is-floating");
+    if (phase === PHASE.alert) {
+      stopIdle();
+      rig.classList.remove("is-floating");
+      showClip("wave");
+      return;
+    }
+    if (entered || reduce) rig.classList.add("is-floating");
+    runIdle();
   }
 
   function setPhase(next) {
     if (next === phase) return;
     phase = next;
-    frameIndex = 0;
-    updateMotion(next === PHASE.alert);
-    showFrame(true);
-    schedule();
+    window.clearTimeout(momentTimer);
+    momentTimer = 0;
+    applyPhase();
+  }
+
+  function playMoment(name) {
+    window.clearTimeout(momentTimer);
+    stopIdle();
+    showClip(name);
+    momentTimer = window.setTimeout(() => {
+      momentTimer = 0;
+      applyPhase();
+    }, 2800);
   }
 
   function replayAlert() {
     phase = PHASE.alert;
-    frameIndex = 0;
-    updateMotion(true);
-    showFrame(true);
-    schedule();
+    window.clearTimeout(momentTimer);
+    momentTimer = 0;
+    rig.classList.remove("is-peek");
+    void rig.offsetWidth;
+    rig.classList.add("is-peek");
+    applyPhase();
   }
 
   function setLabel(text) {
@@ -124,8 +123,8 @@ export function createPoseWorker(rig) {
     rig.classList.add("is-floating");
   }
 
-  showFrame();
-  schedule();
+  showClip("idle");
+  runIdle();
 
-  return { setPhase, replayAlert, setLabel };
+  return { setPhase, playMoment, replayAlert, setLabel };
 }

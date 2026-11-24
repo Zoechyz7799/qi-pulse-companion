@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ENCOURAGEMENTS, PRESETS, pickEncouragement, presetById } from "../src/tracking-config.js";
+import { ENCOURAGEMENTS, PRESETS, getCopy, pickEncouragement, presetById } from "../src/tracking-config.js";
 import { createTracker, formatClock } from "../src/tracker.js";
 
 test("encouragements avoid repeating the line that is already showing", () => {
@@ -13,6 +13,12 @@ test("encouragements avoid repeating the line that is already showing", () => {
     "每一次練習都是進步。",
   );
   assert.equal(pickEncouragement(["只有一句"], "只有一句", () => 0.9), "只有一句");
+});
+
+test("english time-up copy says Time's up", () => {
+  assert.equal(getCopy("en").alertShort, "Time's up");
+  assert.equal(getCopy("en").tabFlash, "⏰ Time's up");
+  assert.equal(getCopy("en").notifyTitle, "Time's up");
 });
 
 test("presets include 25 min, 45 min, and a 10 second demo", () => {

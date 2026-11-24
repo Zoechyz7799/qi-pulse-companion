@@ -6,33 +6,41 @@
     <meta name="color-scheme" content="light" />
     <title>25:00</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Liu+Jian+Mao+Cao&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
     <noscript><p class="noscript">這個計時需要 JavaScript。</p></noscript>
     <main class="dock">
-      <p class="encourage" id="encourage" role="status" aria-live="polite" aria-hidden="true">
-        <span id="encourage-text"></span>
-      </p>
-      <section class="card">
-        <header class="card-top">
-          <div class="lang" role="group" aria-label="語言">
-            <button type="button" id="lang-zh" aria-pressed="true">中</button>
-            <button type="button" id="lang-en" aria-pressed="false">EN</button>
+      <button type="button" class="card-toggle" id="card-toggle" aria-expanded="false" aria-controls="card-shell">
+        展開
+      </button>
+      <div class="card-shell" id="card-shell">
+        <section class="card">
+          <header class="card-top">
+            <div class="lang" role="group" aria-label="語言">
+              <button type="button" id="lang-zh" aria-pressed="true">中</button>
+              <button type="button" id="lang-en" aria-pressed="false">EN</button>
+            </div>
+          </header>
+          <p class="cheer is-zh" id="cheer"></p>
+          <p class="clock" id="clock">25:00</p>
+          <p class="status" id="status"></p>
+          <div class="presets" id="presets" role="group" aria-label="時長"></div>
+          <div class="actions">
+            <button type="button" class="primary" id="primary">開始</button>
           </div>
-        </header>
-        <p class="clock" id="clock">25:00</p>
-        <p class="status" id="status"></p>
-        <div class="presets" id="presets" role="group" aria-label="時長"></div>
-        <div class="actions">
-          <button type="button" class="primary" id="primary">開始</button>
-        </div>
-        <p class="hint" id="hint">雙擊看山，立刻提醒</p>
-      </section>
-      <div class="pet-rig" id="pet" aria-label="劉看山。雙擊可立刻提醒。">
+          <p class="hint" id="hint">雙擊看山，換一句鼓勵</p>
+        </section>
+      </div>
+      <div class="pet-rig" id="pet" aria-label="劉看山。雙擊可換一句鼓勵。">
         <div class="pet-stage">
-          <img class="pet-img is-on" src="./poses/idle-stand.svg" alt="" draggable="false" />
-          <img class="pet-img" alt="" draggable="false" />
+          <img class="pet-img" src="./poses/idle.webp" alt="" draggable="false" />
         </div>
       </div>
     </main>

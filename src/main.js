@@ -2,7 +2,6 @@ import { createPoseWorker } from "./pose-worker.js";
 import {
   DEFAULT_PRESET_ID,
   ENCOURAGEMENTS,
-  ENCOURAGEMENT_MS,
   PHASE,
   getCopy,
   pickEncouragement,
@@ -14,10 +13,11 @@ import { createTracker, formatClock } from "./tracker.js";
 const clockEl = document.querySelector("#clock");
 const statusEl = document.querySelector("#status");
 const hintEl = document.querySelector("#hint");
-const encourageEl = document.querySelector("#encourage");
-const encourageText = document.querySelector("#encourage-text");
+const cheerEl = document.querySelector("#cheer");
 const primaryEl = document.querySelector("#primary");
 const presetsEl = document.querySelector("#presets");
+const shellEl = document.querySelector("#card-shell");
+const toggleEl = document.querySelector("#card-toggle");
 const petEl = document.querySelector("#pet");
 const langZh = document.querySelector("#lang-zh");
 const langEn = document.querySelector("#lang-en");
@@ -29,12 +29,11 @@ const LINE_KEY = "qimai-line";
 
 let lang = loadLang();
 let line = "";
-let boxOpen = false;
+let cardOpen = false;
 let selectedId = DEFAULT_PRESET_ID;
 let deadlineTimer = 0;
 let flashTimer = 0;
 let flashOn = false;
-let hideTimer = 0;
 
 tracker.arm(presetById(selectedId));
 
@@ -55,12 +54,17 @@ const presetButtons = PRESETS.map((preset) => {
 
 langZh.addEventListener("click", () => setLang("zh"));
 langEn.addEventListener("click", () => setLang("en"));
+toggleEl.addEventListener("click", () => {
+  if (cardOpen) closeCard();
+  else openCard(true);
+});
 
 primaryEl.addEventListener("click", () => {
   const state = tracker.getState();
   if (state.phase === PHASE.idle) {
     if (lang === "en") unlockSpeech();
     warmNotify();
+    if (!cardOpen) openCard(true);
     const started = tracker.start(presetById(selectedId));
     armDeadline(started.state);
     render(started.state);
@@ -76,17 +80,20 @@ primaryEl.addEventListener("click", () => {
   clearTimeout(deadlineTimer);
   const dismissed = tracker.dismiss();
   quietAlert();
-  hideEncouragement();
   render(dismissed.state);
 });
 
 petEl.addEventListener("dblclick", (event) => {
   event.preventDefault();
-  if (lang === "en") unlockSpeech();
-  clearTimeout(deadlineTimer);
-  tracker.triggerAlert();
-  render(tracker.getState());
-  raiseAlert();
+  openCard(true);
+  pose.playMoment("wave");
+  if (lang === "en") {
+    unlockSpeech();
+    speak(line);
+  } else if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  notify(getCopy(lang), line);
 });
 
 window.setInterval(() => {
@@ -122,9 +129,9 @@ function render(state) {
   hintEl.hidden = state.phase !== PHASE.idle;
   statusEl.textContent =
     state.phase === PHASE.running ? copy.running : state.phase === PHASE.alert ? copy.alertShort : "";
-
   primaryEl.textContent =
     state.phase === PHASE.running ? copy.stop : state.phase === PHASE.alert ? copy.dismiss : copy.start;
+  paintToggle();
 
   for (const button of presetButtons) {
     const preset = presetById(button.dataset.preset);
@@ -136,16 +143,17 @@ function render(state) {
 
   pose.setPhase(state.phase);
   pose.setLabel(copy.petLabel);
-
   if (!flashTimer) document.title = formatClock(state.displayMs);
 }
 
 function raiseAlert() {
   const copy = getCopy(lang);
+  openCard(true);
   pose.replayAlert();
   startFlash(copy);
-  const spoken = showEncouragement();
-  notify(copy, spoken);
+  if (lang === "en") speak(line);
+  else if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  notify(copy, line);
 }
 
 function quietAlert() {
@@ -187,13 +195,14 @@ function setLang(next) {
     /* private mode */
   }
   applyLanguage();
+  if (cardOpen) refreshLine();
   if (wasAlert && flashTimer) {
     stopFlash();
     startFlash(getCopy(lang));
   }
   render(tracker.getState());
-  if (boxOpen) showEncouragement();
-  else if (lang === "zh" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (cardOpen && lang === "en") speak(line);
+  if (lang === "zh" && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
 function applyLanguage() {
@@ -203,8 +212,38 @@ function applyLanguage() {
   langEn.setAttribute("aria-pressed", lang === "en" ? "true" : "false");
   presetsEl.setAttribute("aria-label", copy.presetsLabel);
   document.querySelector(".lang").setAttribute("aria-label", copy.langLabel);
+  cheerEl.classList.toggle("is-zh", lang !== "en");
+  cheerEl.classList.toggle("is-en", lang === "en");
+  paintToggle();
   const noscript = document.querySelector(".noscript");
   if (noscript) noscript.textContent = copy.noscript;
+}
+
+function openCard(reroll) {
+  cardOpen = true;
+  shellEl.classList.add("is-open");
+  toggleEl.setAttribute("aria-expanded", "true");
+  if (reroll || !line) refreshLine();
+  else paintCheer();
+  paintToggle();
+}
+
+function closeCard() {
+  cardOpen = false;
+  shellEl.classList.remove("is-open");
+  toggleEl.setAttribute("aria-expanded", "false");
+  paintToggle();
+}
+
+function paintToggle() {
+  const copy = getCopy(lang);
+  toggleEl.textContent = cardOpen ? copy.collapse : copy.expand;
+}
+
+function paintCheer() {
+  cheerEl.textContent = line;
+  cheerEl.classList.toggle("is-zh", lang !== "en");
+  cheerEl.classList.toggle("is-en", lang === "en");
 }
 
 function refreshLine() {
@@ -221,27 +260,7 @@ function refreshLine() {
   } catch {
     /* private mode */
   }
-}
-
-function showEncouragement() {
-  refreshLine();
-  encourageText.textContent = line;
-  encourageEl.classList.add("is-on");
-  encourageEl.setAttribute("aria-hidden", "false");
-  boxOpen = true;
-  clearTimeout(hideTimer);
-  hideTimer = window.setTimeout(hideEncouragement, ENCOURAGEMENT_MS);
-  if (lang === "en") speak(line);
-  else if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  return line;
-}
-
-function hideEncouragement() {
-  clearTimeout(hideTimer);
-  hideTimer = 0;
-  boxOpen = false;
-  encourageEl.classList.remove("is-on");
-  encourageEl.setAttribute("aria-hidden", "true");
+  paintCheer();
 }
 
 function loadLang() {
