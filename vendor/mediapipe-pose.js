@@ -1,6 +1,5 @@
 /**
  * Thin MediaPipe Pose Landmarker loader (CDN). No UI.
- * Used by pose-worker.js when the camera stream is active.
  */
 
 const VISION_CDN =
@@ -20,9 +19,6 @@ async function loadVision() {
   return visionPromise;
 }
 
-/**
- * @returns {Promise<import('@mediapipe/tasks-vision').PoseLandmarker>}
- */
 export async function createPoseLandmarker() {
   if (landmarkerPromise) return landmarkerPromise;
   landmarkerPromise = (async () => {
@@ -47,13 +43,20 @@ export async function createPoseLandmarker() {
 }
 
 /**
- * Summarize landmarks into a small pose readout object.
  * @param {import('@mediapipe/tasks-vision').PoseLandmarkerResult | null} result
  */
 export function summarizePose(result) {
-  const landmarks = result?.landmarks?.[0];
+  const landmarks = result?.landmarks?.[0] || null;
+  const worldLandmarks = result?.worldLandmarks?.[0] || null;
   if (!landmarks || landmarks.length < 25) {
-    return { detected: false, score: 0, nose: null, shoulders: null };
+    return {
+      detected: false,
+      score: 0,
+      nose: null,
+      shoulders: null,
+      landmarks: null,
+      worldLandmarks: null,
+    };
   }
   const nose = landmarks[0];
   const leftShoulder = landmarks[11];
@@ -67,6 +70,8 @@ export function summarizePose(result) {
       left: { x: round(leftShoulder.x), y: round(leftShoulder.y) },
       right: { x: round(rightShoulder.x), y: round(rightShoulder.y) },
     },
+    landmarks,
+    worldLandmarks,
   };
 }
 

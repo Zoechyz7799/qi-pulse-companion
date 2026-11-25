@@ -1,22 +1,32 @@
 /**
- * Pose tracking worker helper for an active MediaStream.
- * Does not request the camera; only consumes a stream provided by cameraFSM.
+ * Pose tracking + contest coach checks for an active MediaStream.
+ * Does not request the camera; only consumes a stream from cameraFSM.
  */
 
 import { createPoseLandmarker, summarizePose } from "./vendor/mediapipe-pose.js";
+import { createEvaluator } from "./js/core/coach.js";
 
 /**
  * @param {object} options
  * @param {HTMLVideoElement} options.video
- * @param {(pose: ReturnType<typeof summarizePose>) => void} [options.onPose]
+ * @param {(pose: object) => void} [options.onPose]
  */
 export function createPoseTracker(options) {
   const video = options.video;
   const onPose = options.onPose ?? (() => {});
+  const evaluator = createEvaluator();
   let landmarker = null;
   let raf = 0;
   let running = false;
   let lastVideoTime = -1;
+  let checkTarget = "rest";
+  let mode = "standing";
+
+  function setCheck(target, nextMode = "standing") {
+    checkTarget = target || "rest";
+    mode = nextMode || "standing";
+    evaluator.reset();
+  }
 
   async function attach(stream) {
     await detach();
@@ -27,7 +37,15 @@ export function createPoseTracker(options) {
     try {
       landmarker = await createPoseLandmarker();
     } catch (err) {
-      onPose({ detected: false, score: 0, nose: null, shoulders: null, error: String(err?.message || err) });
+      onPose({
+        detected: false,
+        score: 0,
+        nose: null,
+        shoulders: null,
+        landmarks: null,
+        coach: null,
+        error: String(err?.message || err),
+      });
       landmarker = null;
     }
     running = true;
@@ -41,10 +59,30 @@ export function createPoseTracker(options) {
     if (video.currentTime === lastVideoTime) return;
     lastVideoTime = video.currentTime;
     try {
-      const result = landmarker.detectForVideo(video, performance.now());
-      onPose(summarizePose(result));
+      const now = performance.now();
+      const result = landmarker.detectForVideo(video, now);
+      const summary = summarizePose(result);
+      const aspect =
+        video.videoWidth && video.videoHeight
+          ? video.videoWidth / video.videoHeight
+          : 4 / 3;
+      let coach = null;
+      if (summary.detected && summary.landmarks) {
+        coach = evaluator.evaluate(summary.landmarks, checkTarget, mode, aspect, {
+          worldLandmarks: summary.worldLandmarks,
+          timestamp: now,
+        });
+      }
+      onPose({ ...summary, coach, check: checkTarget });
     } catch {
-      onPose({ detected: false, score: 0, nose: null, shoulders: null });
+      onPose({
+        detected: false,
+        score: 0,
+        nose: null,
+        shoulders: null,
+        landmarks: null,
+        coach: null,
+      });
     }
   }
 
@@ -57,6 +95,7 @@ export function createPoseTracker(options) {
     lastVideoTime = -1;
     video.pause?.();
     video.srcObject = null;
+    evaluator.reset();
     if (landmarker) {
       try {
         landmarker.close?.();
@@ -67,5 +106,5 @@ export function createPoseTracker(options) {
     }
   }
 
-  return { attach, detach };
+  return { attach, detach, setCheck };
 }

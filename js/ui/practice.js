@@ -11,7 +11,6 @@ import {
 import { createCameraFSM } from "../core/cameraFSM.js";
 import {
   SAMPLE_SET,
-  STAGE_POSES,
   applySession,
   buildCardPayload,
   endCardForSession,
@@ -19,6 +18,7 @@ import {
   loadProgress,
   poseUrl,
   saveProgress,
+  stageForPhase,
 } from "../data/cards.js";
 import {
   cancelSpeech,
@@ -83,6 +83,7 @@ export function bootPractice(root = document) {
   let lastPose = null;
   let cardPayload = null;
   let tickTimer = 0;
+  let activeCheck = "rest";
 
   const practice = createPracticeFSM({
     set: SAMPLE_SET,
@@ -101,6 +102,8 @@ export function bootPractice(root = document) {
     onStream: async (stream) => {
       cameraPreview.classList.add("is-on");
       await poseTracker.attach(stream);
+      // Re-apply current move check after a fresh landmarker attach.
+      poseTracker.setCheck(activeCheck, "standing");
     },
     onStop: async () => {
       await poseTracker.detach();
@@ -296,25 +299,43 @@ export function bootPractice(root = document) {
 
   function paintGuide(state, copy) {
     const seg = state.segment;
+    const stageSpec = stageForPhase(seg, state.phase);
     const stage = stageOf(state.phase);
-    const clip = STAGE_POSES[state.phase] || seg.pose || "idle.webp";
+    const clip = stageSpec?.clip || seg.pose || "idle.webp";
     const src = poseUrl(clip);
     if (guidePose.getAttribute("src") !== src) guidePose.src = src;
     guideStage.dataset.phase = state.phase;
     guideStage.dataset.stage = stage;
+    guideStage.dataset.check = stageSpec?.check || "";
+    guideStage.dataset.move = seg.id;
     guideStage.classList.toggle("is-inhale", state.phase === PRACTICE_PHASE.breathe && state.phaseProgress < 0.5);
     guideStage.classList.toggle("is-exhale", state.phase === PRACTICE_PHASE.breathe && state.phaseProgress >= 0.5);
     stageBadge.textContent = stageBadgeText(copy, stage);
     segmentLabel.textContent = seg.title[lang] || seg.title.zh;
-    cueLabel.textContent = seg.cue[lang] || seg.cue.zh;
+    const cue =
+      (stageSpec?.cue && (stageSpec.cue[lang] || stageSpec.cue.zh)) ||
+      seg.cue[lang] ||
+      seg.cue.zh;
+    cueLabel.textContent = cue;
     phaseLabel.textContent = phaseText(copy, state.phase);
     const breathing = state.phase === PRACTICE_PHASE.breathe;
     breathLabel.hidden = !breathing;
     if (breathing) {
-      breathLabel.textContent = breathHint(copy, state.phaseProgress);
+      const breath =
+        (stageSpec?.breath && (stageSpec.breath[lang] || stageSpec.breath.zh)) ||
+        breathHint(copy, state.phaseProgress);
+      breathLabel.textContent = breath;
       breathLabel.dataset.breath = state.phaseProgress < 0.5 ? "in" : "out";
     }
     progressFill.style.width = `${Math.round(state.phaseProgress * 100)}%`;
+    syncTrackerCheck(stageSpec?.check || "rest");
+  }
+
+  function syncTrackerCheck(check) {
+    const next = check || "rest";
+    if (next === activeCheck) return;
+    activeCheck = next;
+    poseTracker.setCheck(next, "standing");
   }
 
   function friendlyCameraHint(copy, cam) {
@@ -342,6 +363,17 @@ export function bootPractice(root = document) {
     }
     if (!lastPose.detected) {
       poseReadout.textContent = copy.poseMissing;
+      return;
+    }
+    const coach = lastPose.coach;
+    if (coach?.message) {
+      const tip =
+        lang === "en" ? coachTipEn(coach) : coach.message;
+      const mark = coach.ready ? "✓" : "·";
+      poseReadout.textContent =
+        lang === "en"
+          ? `${mark} ${tip} · ${lastPose.score}%`
+          : `${mark} ${tip} · ${lastPose.score}%`;
       return;
     }
     poseReadout.textContent =
@@ -414,7 +446,9 @@ export function bootPractice(root = document) {
     const state = practice.getState();
     if (!state.segment) return;
     const copy = getCopy(lang);
-    const text = `${state.segment.title.en}. ${phaseText(copy, state.phase)}. ${state.segment.cue.en}`;
+    const stageSpec = stageForPhase(state.segment, state.phase);
+    const cue = stageSpec?.cue?.en || state.segment.cue.en;
+    const text = `${state.segment.title.en}. ${phaseText(copy, state.phase)}. ${cue}`;
     speakEnglish(text);
   }
 
@@ -432,6 +466,22 @@ function stageOf(phase) {
   if (phase === PRACTICE_PHASE.prep) return "rise";
   if (phase === PRACTICE_PHASE.rest) return "close";
   return "hold";
+}
+
+/** Short English tips for contest coach codes (messages stay zh in coach.js). */
+function coachTipEn(coach) {
+  const map = {
+    ready: "Hold this shape a moment",
+    missing: "Step into frame — head and shoulders visible",
+    framing: "Adjust so head, shoulders, and elbows are clear",
+    distance: "Move a little closer so shoulders read clearly",
+    geometry: "Camera frame not ready yet",
+    unsupported: "This step has no check — keep following the guide",
+  };
+  if (coach.ready) return map.ready;
+  if (map[coach.code]) return map[coach.code];
+  if (coach.message) return coach.message;
+  return "Keep following the guide";
 }
 
 function stageBadgeText(copy, stage) {
