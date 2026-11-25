@@ -14,6 +14,7 @@ import {
   STAGE_POSES,
   applySession,
   buildCardPayload,
+  endCardForSession,
   listCollectedCards,
   loadProgress,
   poseUrl,
@@ -195,21 +196,13 @@ export function bootPractice(root = document) {
       finished: state.finished,
     });
     saveProgress(progress);
-    const lastId = state.completedSegmentIds.at(-1);
-    if (lastId) {
-      const cardState = progress.cards[`${SAMPLE_SET.id}:${lastId}`] || {
-        fragment: true,
-        complete: false,
-      };
-      cardPayload = buildCardPayload(SAMPLE_SET, lastId, lang, cardState);
-    } else if (state.finished) {
-      cardPayload = buildCardPayload(SAMPLE_SET, "SET", lang, {
-        fragment: false,
-        complete: true,
-      });
-    } else {
-      cardPayload = null;
-    }
+    // Single segment → fragment only; complete SET only when all three are done.
+    cardPayload = endCardForSession(
+      progress,
+      SAMPLE_SET,
+      state.completedSegmentIds,
+      lang,
+    );
   }
 
   function setLang(next) {
@@ -218,14 +211,19 @@ export function bootPractice(root = document) {
     saveLang(lang);
     applyLanguage();
     if (cardPayload) {
+      const key =
+        cardPayload.segmentId === "SET"
+          ? `${SAMPLE_SET.id}:SET`
+          : `${SAMPLE_SET.id}:${cardPayload.segmentId}`;
       cardPayload = buildCardPayload(
         SAMPLE_SET,
         cardPayload.segmentId,
         lang,
-        progress.cards[`${SAMPLE_SET.id}:${cardPayload.segmentId}`] || {
+        progress.cards[key] || {
           fragment: cardPayload.kind === "fragment",
           complete: cardPayload.kind === "complete",
         },
+        progress,
       );
     }
     render();
@@ -359,7 +357,7 @@ export function bootPractice(root = document) {
       return;
     }
     downloadBtn.hidden = false;
-    const kindLabel = cardPayload.kind === "complete" ? copy.cardComplete : copy.cardFragment;
+    const kindLabel = cardPayload.kindLabel || (cardPayload.kind === "complete" ? copy.cardComplete : copy.cardFragment);
     const points = (cardPayload.points || [])
       .map((p) => `<li>${escapeHtml(p)}</li>`)
       .join("");
@@ -394,7 +392,7 @@ export function bootPractice(root = document) {
     }
     memoryGrid.innerHTML = items
       .map((item) => {
-        const kind = item.kind === "complete" ? copy.cardComplete : copy.cardFragment;
+        const kind = item.kindLabel || (item.kind === "complete" ? copy.cardComplete : copy.cardFragment);
         return `
           <article class="memory-card is-${escapeHtml(item.kind)}">
             <img src="${escapeHtml(poseUrl(item.image))}" alt="" draggable="false" />

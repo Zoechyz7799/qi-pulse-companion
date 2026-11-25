@@ -1,6 +1,6 @@
 /**
- * Sample move-set / card structure. Content is placeholder.
- * Progress is persisted separately via localStorage helpers.
+ * Wushu three-technique set + card progress helpers.
+ * Progress is persisted via localStorage.
  */
 
 /** @typedef {{ zh: string, en: string }} Localized */
@@ -26,67 +26,70 @@
 
 /** @type {MoveSet} */
 export const SAMPLE_SET = Object.freeze({
-  id: "set-demo-1",
-  title: Object.freeze({ zh: "氣脈舒展·示例", en: "Qi Stretch · Sample" }),
+  id: "wushu-three",
+  title: Object.freeze({ zh: "武術三式", en: "Wushu Three" }),
   segments: Object.freeze([
     Object.freeze({
-      id: "seg-open",
-      title: Object.freeze({ zh: "開場站立", en: "Standing open" }),
+      id: "ready-fists",
+      title: Object.freeze({ zh: "并步對拳", en: "Ready Stance & Twin Fists" }),
       cue: Object.freeze({
-        zh: "雙腳與肩同寬，肩鬆、頂心上提。",
-        en: "Feet under shoulders; soften the shoulders, lift the crown.",
+        zh: "雙腳並立與肩同寬，雙手握拳收於腰間，目視前方。",
+        en: "Feet together under the shoulders; fists at the waist; eyes forward.",
       }),
       points: Object.freeze([
-        Object.freeze({ zh: "腳掌均勻著地", en: "Weight even through both feet" }),
-        Object.freeze({ zh: "肩胛輕微下沉", en: "Softly drop the shoulder blades" }),
-        Object.freeze({ zh: "視線平遠", en: "Gaze soft and level" }),
+        Object.freeze({
+          zh: "雙腳並立與肩同寬，雙手握拳收於腰間，目視前方。",
+          en: "Feet together under the shoulders; fists at the waist; eyes forward.",
+        }),
       ]),
-      source: Object.freeze({ zh: "氣脈陪練 · 基礎架", en: "Qi-Pulse · foundation stance" }),
+      source: Object.freeze({ zh: "長拳基本功", en: "Changquan fundamentals" }),
       effect: Object.freeze({
-        zh: "安定氣息，鬆開肩頸緊繃。",
-        en: "Settles the breath; eases neck and shoulder tension.",
+        zh: "穩定下盤，喚醒肩背。",
+        en: "Steadies the base and wakes the shoulders and back.",
       }),
       pose: "idle.webp",
       durationsMs: Object.freeze({ prep: 3000, hold: 5000, breathe: 6000, rest: 2000 }),
     }),
     Object.freeze({
-      id: "seg-reach",
-      title: Object.freeze({ zh: "向上延展", en: "Upward reach" }),
+      id: "heroic-block",
+      title: Object.freeze({ zh: "馬步架掌", en: "Heroic Overhead Block" }),
       cue: Object.freeze({
-        zh: "雙手緩緩上舉，肋側拉開，視線可隨手。",
-        en: "Reach up slowly; lengthen the side body; eyes may follow the hands.",
+        zh: "馬步站穩，一手上架護頭，一手下按，核心收緊。",
+        en: "Hold horse stance; one palm guards overhead, the other presses down; core tight.",
       }),
       points: Object.freeze([
-        Object.freeze({ zh: "肘微彎不鎖死", en: "Keep a soft bend in the elbows" }),
-        Object.freeze({ zh: "肋骨向兩側展開", en: "Widen the ribs sideways" }),
-        Object.freeze({ zh: "腳跟仍紮地", en: "Heels stay rooted" }),
+        Object.freeze({
+          zh: "馬步站穩，一手上架護頭，一手下按，核心收緊。",
+          en: "Hold horse stance; one palm guards overhead, the other presses down; core tight.",
+        }),
       ]),
-      source: Object.freeze({ zh: "氣脈陪練 · 伸展線", en: "Qi-Pulse · lengthening line" }),
+      source: Object.freeze({ zh: "長拳/少林基本功", en: "Changquan / Shaolin basics" }),
       effect: Object.freeze({
-        zh: "拉開側腰，舒緩久坐壓迫。",
-        en: "Opens the side body after long sitting.",
+        zh: "開肩、強化核心穩定。",
+        en: "Opens the shoulders and strengthens core stability.",
       }),
-      pose: "sway.webp",
+      pose: "laptop.webp",
       durationsMs: Object.freeze({ prep: 3000, hold: 6000, breathe: 6000, rest: 2000 }),
     }),
     Object.freeze({
-      id: "seg-fold",
-      title: Object.freeze({ zh: "前屈放鬆", en: "Forward fold" }),
+      id: "bow-push",
+      title: Object.freeze({ zh: "弓步推掌", en: "Bow-Stance Palm Push" }),
       cue: Object.freeze({
-        zh: "膝微彎，軀幹鬆垂，頭部放鬆。",
-        en: "Soft knees; fold forward; let the head hang heavy.",
+        zh: "前弓後蹬，雙手向前推掌，腰腹發力。",
+        en: "Front knee bent, rear leg drives; both palms push forward from the waist.",
       }),
       points: Object.freeze([
-        Object.freeze({ zh: "膝蓋允許彎曲", en: "Knees may stay bent" }),
-        Object.freeze({ zh: "脊柱逐節下放", en: "Release the spine vertebra by vertebra" }),
-        Object.freeze({ zh: "下巴鬆、頸後長", en: "Jaw soft, nape long" }),
+        Object.freeze({
+          zh: "前弓後蹬，雙手向前推掌，腰腹發力。",
+          en: "Front knee bent, rear leg drives; both palms push forward from the waist.",
+        }),
       ]),
-      source: Object.freeze({ zh: "氣脈陪練 · 放鬆收", en: "Qi-Pulse · soft close" }),
+      source: Object.freeze({ zh: "長拳/太極推手基礎", en: "Changquan / Taiji push-hands base" }),
       effect: Object.freeze({
-        zh: "釋放腰背，帶回安靜收束。",
-        en: "Releases the back and returns to quiet close.",
+        zh: "拉伸髖部與肩，釋放久坐張力。",
+        en: "Stretches hips and shoulders; eases desk tension.",
       }),
-      pose: "sleep.webp",
+      pose: "sway.webp",
       durationsMs: Object.freeze({ prep: 3000, hold: 5000, breathe: 5000, rest: 2000 }),
     }),
   ]),
@@ -153,8 +156,17 @@ export function saveProgress(progress) {
   }
 }
 
+export function fragmentCount(progress, set) {
+  return set.segments.filter((seg) => progress.completedSegments[seg.id]).length;
+}
+
+export function isSetComplete(progress, set) {
+  return set.segments.every((seg) => progress.completedSegments[seg.id]);
+}
+
 /**
- * Mark segments complete and award fragment / complete cards.
+ * Award fragment cards per practiced segment. Complete card only when all three are done.
+ * Single-segment finish never yields a complete card.
  * @param {ProgressStore} progress
  * @param {MoveSet} set
  * @param {string[]} segmentIds
@@ -176,29 +188,20 @@ export function applySession(progress, set, segmentIds, session) {
   for (const id of segmentIds) {
     next.completedSegments[id] = true;
     const cardId = `${set.id}:${id}`;
-    const prev = next.cards[cardId] || { fragment: false, complete: false };
-    const fullSegment = Boolean(session.finished);
+    // Segment techniques are always fragments — never complete on their own.
     next.cards[cardId] = {
       fragment: true,
-      complete: Boolean(prev.complete) || fullSegment,
+      complete: false,
       earnedAt: Date.now(),
     };
   }
 
-  const allDone = set.segments.every((seg) => next.completedSegments[seg.id]);
-  if (allDone) {
-    const setCardId = `${set.id}:SET`;
-    next.cards[setCardId] = {
+  if (isSetComplete(next, set)) {
+    next.cards[`${set.id}:SET`] = {
       fragment: false,
       complete: true,
       earnedAt: Date.now(),
     };
-    // Fragments glow into a complete set card — mark each segment complete.
-    for (const seg of set.segments) {
-      const cardId = `${set.id}:${seg.id}`;
-      const prev = next.cards[cardId] || { fragment: true, complete: false };
-      next.cards[cardId] = { ...prev, fragment: true, complete: true, earnedAt: Date.now() };
-    }
   }
 
   return next;
@@ -209,33 +212,46 @@ export function applySession(progress, set, segmentIds, session) {
  * @param {string} segmentId
  * @param {'zh'|'en'} lang
  * @param {{ fragment: boolean, complete: boolean }} cardState
+ * @param {ProgressStore} [progress]
  */
-export function buildCardPayload(set, segmentId, lang, cardState) {
+export function buildCardPayload(set, segmentId, lang, cardState, progress) {
   const segment = set.segments.find((s) => s.id === segmentId);
   const isSet = segmentId === "SET";
+  const total = set.segments.length;
+  const earned = progress ? fragmentCount(progress, set) : cardState.complete ? total : 1;
   const title = isSet
     ? set.title[lang] || set.title.zh
     : segment?.title[lang] || segment?.title.zh || segmentId;
   const cue = isSet
     ? lang === "en"
-      ? "Fragments gathered — the set glows complete."
-      : "碎片齊聚，整套招式卡發光完成。"
+      ? "All three techniques practiced — the set card is complete."
+      : "三式皆練完，整套招式卡完成。"
     : segment?.cue[lang] || segment?.cue.zh || "";
   const points = isSet
     ? set.segments.map((s) => s.title[lang] || s.title.zh)
     : (segment?.points || []).map((p) => p[lang] || p.zh);
   const source = isSet
     ? lang === "en"
-      ? "Qi-Pulse · full set"
-      : "氣脈陪練 · 整套"
+      ? "Changquan fundamentals · full set"
+      : "長拳基本功 · 整套"
     : segment?.source[lang] || segment?.source.zh || "";
   const effect = isSet
     ? lang === "en"
-      ? "Whole-set ease: breath, length, and soft close."
-      : "整套舒展：呼吸、延展與柔和收束。"
+      ? "Steadies the base, opens the shoulders, eases desk tension."
+      : "穩定下盤、開肩、釋放久坐張力。"
     : segment?.effect[lang] || segment?.effect.zh || "";
   const image = isSet ? "wave.webp" : segment?.pose || "idle.webp";
-  const kind = cardState.complete || isSet ? "complete" : "fragment";
+  // Complete only for the SET card after all three (or full-set finish → all three marked).
+  const kind = isSet && cardState.complete ? "complete" : "fragment";
+  const kindLabel =
+    kind === "complete"
+      ? lang === "en"
+        ? "Complete card"
+        : "完整卡"
+      : lang === "en"
+        ? `Fragment ${Math.max(1, Math.min(earned, total))}/${total}`
+        : `碎片卡 ${Math.max(1, Math.min(earned, total))}/${total}`;
+
   return {
     setId: set.id,
     segmentId,
@@ -246,6 +262,9 @@ export function buildCardPayload(set, segmentId, lang, cardState) {
     effect,
     image,
     kind,
+    kindLabel,
+    fragmentIndex: Math.max(1, Math.min(earned, total)),
+    fragmentTotal: total,
     lang,
   };
 }
@@ -261,13 +280,30 @@ export function listCollectedCards(progress, set, lang) {
     const key = `${set.id}:${seg.id}`;
     const state = progress.cards[key];
     if (!state) continue;
-    items.push(buildCardPayload(set, seg.id, lang, state));
+    items.push(buildCardPayload(set, seg.id, lang, state, progress));
   }
   const setKey = `${set.id}:SET`;
-  if (progress.cards[setKey]) {
-    items.push(buildCardPayload(set, "SET", lang, progress.cards[setKey]));
+  if (progress.cards[setKey]?.complete) {
+    items.push(buildCardPayload(set, "SET", lang, progress.cards[setKey], progress));
   }
   return items;
+}
+
+/**
+ * Pick the end-of-round card: Complete SET only when all three are done; else fragment.
+ * @param {ProgressStore} progress
+ * @param {MoveSet} set
+ * @param {string[]} segmentIds
+ * @param {'zh'|'en'} lang
+ */
+export function endCardForSession(progress, set, segmentIds, lang) {
+  if (isSetComplete(progress, set) && progress.cards[`${set.id}:SET`]?.complete) {
+    return buildCardPayload(set, "SET", lang, progress.cards[`${set.id}:SET`], progress);
+  }
+  const lastId = segmentIds.at(-1);
+  if (!lastId) return null;
+  const state = progress.cards[`${set.id}:${lastId}`] || { fragment: true, complete: false };
+  return buildCardPayload(set, lastId, lang, state, progress);
 }
 
 export function poseUrl(file) {
