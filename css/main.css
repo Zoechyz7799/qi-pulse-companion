@@ -97,10 +97,19 @@ body.is-home {
 }
 
 .card-toggle,
-button {
+button,
+.practice-link {
   font: inherit;
   color: inherit;
   cursor: pointer;
+}
+
+.dock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 
 .card-toggle {
@@ -109,6 +118,25 @@ button {
   border-radius: 999px;
   padding: 6px 14px;
   box-shadow: var(--shadow);
+}
+
+.practice-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  box-shadow: var(--shadow);
+}
+
+.practice-link:hover,
+.practice-link:focus-visible {
+  filter: brightness(1.05);
+  outline: 2px solid color-mix(in srgb, var(--accent) 40%, white);
+  outline-offset: 2px;
 }
 
 .card-shell {
@@ -251,6 +279,7 @@ button {
   animation: crawl-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
   user-select: none;
   -webkit-user-select: none;
+  cursor: pointer;
 }
 
 .pet-rig.is-peek {

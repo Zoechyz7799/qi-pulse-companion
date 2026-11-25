@@ -12,9 +12,12 @@
     <noscript><p class="noscript">這個頁面需要 JavaScript。</p></noscript>
     <p class="brand-mark" id="brand">氣脈陪練</p>
     <main class="dock">
-      <button type="button" class="card-toggle" id="card-toggle" aria-expanded="false" aria-controls="card-shell">
-        展開
-      </button>
+      <div class="dock-actions" role="group" aria-label="快捷">
+        <button type="button" class="card-toggle" id="card-toggle" aria-expanded="false" aria-controls="card-shell">
+          展開
+        </button>
+        <a class="practice-link" id="go-practice" href="practice.html">開始練習</a>
+      </div>
       <div class="card-shell" id="card-shell">
         <section class="card">
           <header class="card-top">
@@ -22,7 +25,6 @@
               <button type="button" id="lang-zh" aria-pressed="true">中</button>
               <button type="button" id="lang-en" aria-pressed="false">EN</button>
             </div>
-            <a class="secondary" id="go-practice" href="./practice.html">開始練習</a>
           </header>
           <p class="cheer is-zh" id="cheer"></p>
           <p class="clock" id="clock">25:00</p>
@@ -31,10 +33,10 @@
           <div class="actions">
             <button type="button" class="primary" id="primary">開始</button>
           </div>
-          <p class="hint" id="hint">雙擊看山，立刻提醒</p>
+          <p class="hint" id="hint">點看山進練習；雙擊立刻提醒</p>
         </section>
       </div>
-      <div class="pet-rig" id="pet" aria-label="劉看山。雙擊可立刻提醒。">
+      <div class="pet-rig" id="pet" role="link" tabindex="0" aria-label="劉看山。點一下進練習，雙擊立刻提醒。">
         <div class="pet-stage">
           <img class="pet-img" src="./public/poses/idle.webp" alt="" draggable="false" />
         </div>
@@ -74,6 +76,8 @@
       const langEn = document.querySelector("#lang-en");
       const brandEl = document.querySelector("#brand");
       const goPractice = document.querySelector("#go-practice");
+      const dockActions = document.querySelector(".dock-actions");
+      const PRACTICE_HREF = "practice.html";
 
       const timer = createTimerFSM();
       const pet = createPet(petEl);
@@ -86,6 +90,36 @@
       let deadlineTimer = 0;
       let flashTimer = 0;
       let flashOn = false;
+      let practiceNavTimer = 0;
+
+      function practiceUrl() {
+        return new URL(PRACTICE_HREF, window.location.href).href;
+      }
+
+      function goToPractice() {
+        window.location.assign(practiceUrl());
+      }
+
+      function cancelPendingPracticeNav() {
+        window.clearTimeout(practiceNavTimer);
+        practiceNavTimer = 0;
+      }
+
+      function schedulePracticeNav() {
+        cancelPendingPracticeNav();
+        // Delay so a double-click can cancel and raise the timer alert instead.
+        practiceNavTimer = window.setTimeout(() => {
+          practiceNavTimer = 0;
+          goToPractice();
+        }, 280);
+      }
+
+      goPractice.setAttribute("href", PRACTICE_HREF);
+      goPractice.addEventListener("click", (event) => {
+        // Force same-origin relative navigation even if the page was opened oddly.
+        event.preventDefault();
+        goToPractice();
+      });
 
       timer.arm(presetById(selectedId));
 
@@ -135,13 +169,26 @@
         render(dismissed.state);
       });
 
+      petEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        schedulePracticeNav();
+      });
+
       petEl.addEventListener("dblclick", (event) => {
         event.preventDefault();
+        cancelPendingPracticeNav();
         openCard(true);
         const alerted = timer.triggerAlert();
         clearTimeout(deadlineTimer);
         raiseAlert();
         render(alerted.state);
+      });
+
+      petEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          goToPractice();
+        }
       });
 
       window.setInterval(() => {
@@ -268,6 +315,7 @@
         cheerEl.classList.toggle("is-en", lang === "en");
         brandEl.textContent = copy.brand;
         goPractice.textContent = copy.goPractice;
+        if (dockActions) dockActions.setAttribute("aria-label", copy.dockActionsLabel);
         paintToggle();
         const noscript = document.querySelector(".noscript");
         if (noscript) noscript.textContent = copy.noscript;
