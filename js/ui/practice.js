@@ -11,9 +11,12 @@ import {
 import { createCameraFSM } from "../core/cameraFSM.js";
 import {
   SAMPLE_SET,
+  STAGE_POSES,
   applySession,
   buildCardPayload,
+  listCollectedCards,
   loadProgress,
+  poseUrl,
   saveProgress,
 } from "../data/cards.js";
 import {
@@ -48,7 +51,9 @@ export function bootPractice(root = document) {
   const segmentRecommend = root.querySelector("#segment-recommend");
   const beginBtn = root.querySelector("#begin");
 
-  const guideFigure = root.querySelector("#guide-figure");
+  const guideStage = root.querySelector("#guide-stage");
+  const guidePose = root.querySelector("#guide-pose");
+  const stageBadge = root.querySelector("#stage-badge");
   const progressFill = root.querySelector("#progress-fill");
   const phaseLabel = root.querySelector("#phase-label");
   const breathLabel = root.querySelector("#breath-label");
@@ -68,6 +73,8 @@ export function bootPractice(root = document) {
   const cardResult = root.querySelector("#card-result");
   const downloadBtn = root.querySelector("#download-card");
   const backHome = root.querySelector("#back-home");
+  const memoryTitle = root.querySelector("#memory-title");
+  const memoryGrid = root.querySelector("#memory-grid");
 
   let lang = loadLang();
   let progress = loadProgress();
@@ -249,8 +256,10 @@ export function bootPractice(root = document) {
     doneTitle.textContent = copy.doneTitle;
     downloadBtn.textContent = copy.downloadCard;
     backHome.textContent = copy.backHome;
+    memoryTitle.textContent = copy.memoryTitle;
     root.querySelector("#stat-today-label").textContent = copy.todayDuration;
     root.querySelector("#stat-interrupt-label").textContent = copy.interruptCount;
+    root.querySelector(".progress-track")?.setAttribute("aria-label", copy.progress);
   }
 
   function render() {
@@ -270,24 +279,11 @@ export function bootPractice(root = document) {
     modeFullBtn.setAttribute("aria-pressed", selectedMode === PRACTICE_MODE.full ? "true" : "false");
 
     if (state.screen === PRACTICE_SCREEN.active && state.segment) {
-      const seg = state.segment;
-      segmentLabel.textContent = seg.title[lang] || seg.title.zh;
-      cueLabel.textContent = seg.cue[lang] || seg.cue.zh;
-      phaseLabel.textContent = phaseText(copy, state.phase);
-      breathLabel.textContent =
-        state.phase === PRACTICE_PHASE.breathe
-          ? breathHint(copy, state.phaseProgress)
-          : "";
-      progressFill.style.width = `${Math.round(state.phaseProgress * 100)}%`;
-      guideFigure.dataset.phase = state.phase;
+      paintGuide(state, copy);
     }
 
     cameraToggle.textContent = cam.active ? copy.closeCamera : copy.openCamera;
-    cameraHint.textContent = cam.active
-      ? copy.cameraOnHint
-      : cam.phase === "error"
-        ? `${copy.cameraError}: ${cam.error || ""}`
-        : copy.cameraOffHint;
+    cameraHint.textContent = friendlyCameraHint(copy, cam);
     paintPose();
 
     const today = progress.today;
@@ -296,26 +292,64 @@ export function bootPractice(root = document) {
 
     if (state.screen === PRACTICE_SCREEN.done) {
       paintCardResult(copy);
+      paintMemory(copy);
     }
   }
 
+  function paintGuide(state, copy) {
+    const seg = state.segment;
+    const stage = stageOf(state.phase);
+    const clip = STAGE_POSES[state.phase] || seg.pose || "idle.webp";
+    const src = poseUrl(clip);
+    if (guidePose.getAttribute("src") !== src) guidePose.src = src;
+    guideStage.dataset.phase = state.phase;
+    guideStage.dataset.stage = stage;
+    guideStage.classList.toggle("is-inhale", state.phase === PRACTICE_PHASE.breathe && state.phaseProgress < 0.5);
+    guideStage.classList.toggle("is-exhale", state.phase === PRACTICE_PHASE.breathe && state.phaseProgress >= 0.5);
+    stageBadge.textContent = stageBadgeText(copy, stage);
+    segmentLabel.textContent = seg.title[lang] || seg.title.zh;
+    cueLabel.textContent = seg.cue[lang] || seg.cue.zh;
+    phaseLabel.textContent = phaseText(copy, state.phase);
+    const breathing = state.phase === PRACTICE_PHASE.breathe;
+    breathLabel.hidden = !breathing;
+    if (breathing) {
+      breathLabel.textContent = breathHint(copy, state.phaseProgress);
+      breathLabel.dataset.breath = state.phaseProgress < 0.5 ? "in" : "out";
+    }
+    progressFill.style.width = `${Math.round(state.phaseProgress * 100)}%`;
+  }
+
+  function friendlyCameraHint(copy, cam) {
+    if (cam.active) return copy.cameraOnHint;
+    if (cam.phase !== "error") return copy.cameraOffHint;
+    const raw = String(cam.error || "").toLowerCase();
+    if (raw.includes("notallowed") || raw.includes("permission") || raw.includes("denied")) {
+      return copy.cameraDenied;
+    }
+    if (raw.includes("notreadable") || raw.includes("trackstart") || raw.includes("busy") || raw.includes("in use")) {
+      return copy.cameraBusy;
+    }
+    return copy.cameraError;
+  }
+
   function paintPose() {
+    const copy = getCopy(lang);
     if (!lastPose) {
       poseReadout.textContent = "";
       return;
     }
     if (lastPose.error) {
-      poseReadout.textContent = lastPose.error;
+      poseReadout.textContent = copy.cameraError;
       return;
     }
     if (!lastPose.detected) {
-      poseReadout.textContent = lang === "en" ? "No pose" : "未偵測到姿勢";
+      poseReadout.textContent = copy.poseMissing;
       return;
     }
     poseReadout.textContent =
       lang === "en"
-        ? `Pose ${lastPose.score}% · nose (${lastPose.nose.x}, ${lastPose.nose.y})`
-        : `姿勢 ${lastPose.score}% · 鼻尖 (${lastPose.nose.x}, ${lastPose.nose.y})`;
+        ? `Following · ${lastPose.score}%`
+        : `跟著練 · ${lastPose.score}%`;
   }
 
   function paintCardResult(copy) {
@@ -326,13 +360,52 @@ export function bootPractice(root = document) {
     }
     downloadBtn.hidden = false;
     const kindLabel = cardPayload.kind === "complete" ? copy.cardComplete : copy.cardFragment;
+    const points = (cardPayload.points || [])
+      .map((p) => `<li>${escapeHtml(p)}</li>`)
+      .join("");
+    cardResult.className = `card-result is-${cardPayload.kind}`;
     cardResult.innerHTML = `
-      <h3>${escapeHtml(cardPayload.title)}</h3>
-      <p class="card-meta">${escapeHtml(kindLabel)} · ${escapeHtml(SAMPLE_SET.title[lang] || SAMPLE_SET.title.zh)}</p>
-      <p>${escapeHtml(cardPayload.cue)}</p>
-      <div class="card-canvas-wrap"><canvas id="card-canvas" width="560" height="360" aria-hidden="true"></canvas></div>
+      <div class="tech-card is-${escapeHtml(cardPayload.kind)}">
+        <div class="tech-card-art">
+          <img src="${escapeHtml(poseUrl(cardPayload.image))}" alt="" draggable="false" />
+        </div>
+        <div class="tech-card-body">
+          <p class="card-meta">${escapeHtml(kindLabel)} · ${escapeHtml(SAMPLE_SET.title[lang] || SAMPLE_SET.title.zh)}</p>
+          <h3>${escapeHtml(cardPayload.title)}</h3>
+          <p>${escapeHtml(cardPayload.cue)}</p>
+          <p class="tech-label">${escapeHtml(copy.cardPoints)}</p>
+          <ul class="tech-points">${points}</ul>
+          <p class="tech-label">${escapeHtml(copy.cardSource)}</p>
+          <p class="tech-field">${escapeHtml(cardPayload.source)}</p>
+          <p class="tech-label">${escapeHtml(copy.cardEffect)}</p>
+          <p class="tech-field">${escapeHtml(cardPayload.effect)}</p>
+        </div>
+      </div>
+      <div class="card-canvas-wrap"><canvas id="card-canvas" width="640" height="400" aria-hidden="true"></canvas></div>
     `;
-    drawCardCanvas(root.querySelector("#card-canvas"), cardPayload, kindLabel);
+    drawCardCanvas(root.querySelector("#card-canvas"), cardPayload, kindLabel, copy);
+  }
+
+  function paintMemory(copy) {
+    const items = listCollectedCards(progress, SAMPLE_SET, lang);
+    if (!items.length) {
+      memoryGrid.innerHTML = `<p class="card-meta">${escapeHtml(copy.memoryEmpty)}</p>`;
+      return;
+    }
+    memoryGrid.innerHTML = items
+      .map((item) => {
+        const kind = item.kind === "complete" ? copy.cardComplete : copy.cardFragment;
+        return `
+          <article class="memory-card is-${escapeHtml(item.kind)}">
+            <img src="${escapeHtml(poseUrl(item.image))}" alt="" draggable="false" />
+            <div>
+              <strong>${escapeHtml(item.title)}</strong>
+              <span>${escapeHtml(kind)}</span>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
   }
 
   function speakCue() {
@@ -355,6 +428,18 @@ export function bootPractice(root = document) {
     a.download = `qi-pulse-${cardPayload.segmentId}.png`;
     a.click();
   }
+}
+
+function stageOf(phase) {
+  if (phase === PRACTICE_PHASE.prep) return "rise";
+  if (phase === PRACTICE_PHASE.rest) return "close";
+  return "hold";
+}
+
+function stageBadgeText(copy, stage) {
+  if (stage === "rise") return copy.stageRise;
+  if (stage === "close") return copy.stageClose;
+  return copy.stageHold;
 }
 
 function phaseText(copy, phase) {
@@ -384,28 +469,52 @@ function escapeHtml(text) {
     .replaceAll('"', "&quot;");
 }
 
-function drawCardCanvas(canvas, payload, kindLabel) {
+function drawCardCanvas(canvas, payload, kindLabel, copy) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
   const h = canvas.height;
   const grad = ctx.createLinearGradient(0, 0, w, h);
-  grad.addColorStop(0, "#e7f3ee");
-  grad.addColorStop(1, "#f4efe6");
+  if (payload.kind === "complete") {
+    grad.addColorStop(0, "#dff3ea");
+    grad.addColorStop(0.55, "#f7f1e4");
+    grad.addColorStop(1, "#e7f6ef");
+  } else {
+    grad.addColorStop(0, "#f3f6f4");
+    grad.addColorStop(1, "#efe8dc");
+  }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
+
+  const img = new Image();
+  img.onload = () => {
+    ctx.save();
+    ctx.globalAlpha = payload.kind === "complete" ? 0.92 : 0.78;
+    ctx.drawImage(img, w - 250, 40, 200, 200);
+    ctx.restore();
+    paintCardText(ctx, payload, kindLabel, copy, w, h);
+  };
+  img.onerror = () => paintCardText(ctx, payload, kindLabel, copy, w, h);
+  img.src = poseUrl(payload.image);
+  paintCardText(ctx, payload, kindLabel, copy, w, h);
+}
+
+function paintCardText(ctx, payload, kindLabel, copy, w, h) {
   ctx.fillStyle = "#2f6f5e";
-  ctx.font = "700 36px Nunito, sans-serif";
-  ctx.fillText(payload.kind === "complete" ? "氣脈" : "碎片", 36, 64);
+  ctx.font = "700 28px Nunito, sans-serif";
+  ctx.fillText(kindLabel, 36, 52);
   ctx.fillStyle = "#1c2a26";
-  ctx.font = "700 42px Nunito, sans-serif";
-  wrapText(ctx, payload.title, 36, 130, w - 72, 48);
+  ctx.font = "700 40px Nunito, sans-serif";
+  wrapText(ctx, payload.title, 36, 110, w - 300, 46);
   ctx.fillStyle = "#5a6b64";
-  ctx.font = "500 24px Nunito, sans-serif";
-  wrapText(ctx, payload.cue, 36, 220, w - 72, 34);
+  ctx.font = "500 22px Nunito, sans-serif";
+  wrapText(ctx, payload.cue, 36, 180, w - 300, 30);
   ctx.fillStyle = "#2f6f5e";
-  ctx.font = "600 22px Nunito, sans-serif";
-  ctx.fillText(kindLabel, 36, h - 36);
+  ctx.font = "600 20px Nunito, sans-serif";
+  ctx.fillText(copy.cardEffect, 36, h - 70);
+  ctx.fillStyle = "#1c2a26";
+  ctx.font = "500 20px Nunito, sans-serif";
+  wrapText(ctx, payload.effect, 36, h - 40, w - 72, 26);
 }
 
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {

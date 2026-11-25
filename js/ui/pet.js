@@ -13,10 +13,11 @@ const CLIPS = Object.freeze({
 });
 
 const IDLE_CYCLE = Object.freeze([
-  Object.freeze({ clip: "idle", hold: 2600 }),
+  Object.freeze({ clip: "idle", hold: 2400 }),
   Object.freeze({ clip: "sway", hold: 2600 }),
   Object.freeze({ clip: "sleep", hold: 2800 }),
-  Object.freeze({ clip: "ball", hold: 2600 }),
+  Object.freeze({ clip: "ball", hold: 2400 }),
+  Object.freeze({ clip: "laptop", hold: 2600 }),
 ]);
 
 function poseUrl(file) {
@@ -66,19 +67,23 @@ export function createPet(rig) {
 
   function applyPhase() {
     rig.dataset.phase = phase;
+    rig.classList.toggle("is-alert", phase === "alert");
+    rig.classList.toggle("is-running", phase === "running");
     if (momentTimer) return;
     if (phase === "running") {
       stopIdle();
-      rig.classList.remove("is-floating");
+      rig.classList.remove("is-floating", "is-breathe");
       showClip("laptop");
       return;
     }
     if (phase === "alert") {
       stopIdle();
       rig.classList.remove("is-floating");
+      rig.classList.add("is-breathe");
       showClip("wave");
       return;
     }
+    rig.classList.remove("is-breathe");
     if (entered || reduce) rig.classList.add("is-floating");
     runIdle();
   }

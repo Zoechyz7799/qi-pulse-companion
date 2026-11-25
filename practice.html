@@ -45,16 +45,23 @@
       </section>
 
       <section class="panel" id="screen-active" hidden>
-        <div class="guide-stage" aria-hidden="true">
-          <div class="guide-figure" id="guide-figure" data-phase="prep"></div>
+        <div class="guide-stage" data-phase="prep" id="guide-stage">
+          <img
+            class="guide-pose"
+            id="guide-pose"
+            src="./public/poses/idle.webp"
+            alt=""
+            draggable="false"
+          />
+          <span class="guide-stage-badge" id="stage-badge">起</span>
         </div>
-        <div class="progress-track" aria-label="進度">
+        <div class="progress-track" aria-label="節奏">
           <div class="progress-fill" id="progress-fill"></div>
         </div>
         <div class="phase-row">
           <strong id="segment-label"></strong>
-          <span id="phase-label"></span>
-          <span id="breath-label"></span>
+          <span class="phase-pill" id="phase-label"></span>
+          <span class="breath-glow" id="breath-label" hidden></span>
         </div>
         <p id="cue-label"></p>
 
@@ -88,6 +95,10 @@
           <button type="button" class="secondary" id="download-card">下載圖片</button>
           <a class="primary" id="back-home" href="./index.html">回桌寵</a>
         </div>
+        <section class="memory" id="memory">
+          <h3 id="memory-title">回憶</h3>
+          <div class="memory-grid" id="memory-grid"></div>
+        </section>
       </section>
     </div>
     <script type="module">
