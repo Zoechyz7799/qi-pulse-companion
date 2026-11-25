@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>25:00</title>
+    <link rel="icon" href="./public/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./css/main.css" />
+  </head>
+  <body class="is-home">
+    <noscript><p class="noscript">這個頁面需要 JavaScript。</p></noscript>
+    <p class="brand-mark" id="brand">氣脈陪練</p>
+    <main class="dock">
+      <div class="dock-actions" role="group" aria-label="快捷">
+        <button type="button" class="card-toggle" id="card-toggle" aria-expanded="false" aria-controls="card-shell">
+          展開
+        </button>
+        <a class="practice-link" id="go-practice" href="practice.html">開始練習</a>
+      </div>
+      <div class="card-shell" id="card-shell">
+        <section class="card">
+          <header class="card-top">
+            <div class="lang" role="group" aria-label="語言">
+              <button type="button" id="lang-zh" aria-pressed="true">中</button>
+              <button type="button" id="lang-en" aria-pressed="false">EN</button>
+            </div>
+          </header>
+          <p class="cheer is-zh" id="cheer"></p>
+          <p class="clock" id="clock">25:00</p>
+          <p class="status" id="status"></p>
+          <div class="presets" id="presets" role="group" aria-label="時長"></div>
+          <div class="actions">
+            <button type="button" class="primary" id="primary">開始</button>
+            <button type="button" class="secondary" id="alert-practice" hidden>
+              要不要一起伸展一下
+            </button>
+          </div>
+          <p class="hint" id="hint">點看山進練習；雙擊立刻提醒</p>
+        </section>
+      </div>
+      <div class="pet-rig" id="pet" role="link" tabindex="0" aria-label="劉看山。點一下進練習，雙擊立刻提醒。">
+        <div class="pet-stage">
+          <img class="pet-img" src="./public/poses/idle.webp" alt="" draggable="false" />
+        </div>
+      </div>
+    </main>
+    <script type="module">
+      import {
+        createTimerFSM,
+        formatClock,
+        presetById,
+        TIMER_PHASE,
+        TIMER_PRESETS,
+        DEFAULT_TIMER_PRESET_ID,
+      } from "./js/core/timerFSM.js";
+      import {
+        ENCOURAGEMENTS,
+        getCopy,
+        loadLang,
+        pickEncouragement,
+        saveLang,
+      } from "./js/locale.js";
+      import { createPet } from "./js/ui/pet.js";
+
+      const clockEl = document.querySelector("#clock");
+      const statusEl = document.querySelector("#status");
+      const hintEl = document.querySelector("#hint");
+      const cheerEl = document.querySelector("#cheer");
+      const primaryEl = document.querySelector("#primary");
+      const alertPracticeEl = document.querySelector("#alert-practice");
+      const presetsEl = document.querySelector("#presets");
+      const shellEl = document.querySelector("#card-shell");
+      const toggleEl = document.querySelector("#card-toggle");
+      const petEl = document.querySelector("#pet");
+      const langZh = document.querySelector("#lang-zh");
+      const langEn = document.querySelector("#lang-en");
+      const brandEl = document.querySelector("#brand");
+      const goPractice = document.querySelector("#go-practice");
+      const dockActions = document.querySelector(".dock-actions");
+      const PRACTICE_HREF = "practice.html";
+
+      const timer = createTimerFSM();
+      const pet = createPet(petEl);
+      const LINE_KEY = "qimai-line";
+
+      let lang = loadLang();
+      let line = "";
+      let cardOpen = false;
+      let selectedId = DEFAULT_TIMER_PRESET_ID;
+      let deadlineTimer = 0;
+      let flashTimer = 0;
+      let flashOn = false;
+      let practiceNavTimer = 0;
+
+      function practiceUrl() {
+        return new URL(PRACTICE_HREF, window.location.href).href;
+      }
+
+      function goToPractice() {
+        window.location.assign(practiceUrl());
+      }
+
+      function cancelPendingPracticeNav() {
+        window.clearTimeout(practiceNavTimer);
+        practiceNavTimer = 0;
+      }
+
+      function schedulePracticeNav() {
+        cancelPendingPracticeNav();
+        // Delay so a double-click can cancel and raise the timer alert instead.
+        practiceNavTimer = window.setTimeout(() => {
+          practiceNavTimer = 0;
+          goToPractice();
+        }, 280);
+      }
+
+      goPractice.setAttribute("href", PRACTICE_HREF);
+      goPractice.addEventListener("click", (event) => {
+        // Force same-origin relative navigation even if the page was opened oddly.
+        event.preventDefault();
+        goToPractice();
+      });
+
+      timer.arm(presetById(selectedId));
+
+      const presetButtons = TIMER_PRESETS.map((preset) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "chip";
+        button.dataset.preset = preset.id;
+        button.addEventListener("click", () => {
+          if (timer.getState().phase !== TIMER_PHASE.idle) return;
+          selectedId = preset.id;
+          timer.arm(preset);
+          render(timer.getState());
+        });
+        presetsEl.append(button);
+        return button;
+      });
+
+      langZh.addEventListener("click", () => setLang("zh"));
+      langEn.addEventListener("click", () => setLang("en"));
+      toggleEl.addEventListener("click", () => {
+        if (cardOpen) closeCard();
+        else openCard(true);
+      });
+
+      primaryEl.addEventListener("click", () => {
+        const state = timer.getState();
+        if (state.phase === TIMER_PHASE.idle) {
+          warmNotify();
+          if (!cardOpen) openCard(true);
+          const started = timer.start(presetById(selectedId));
+          armDeadline(started.state);
+          render(started.state);
+          return;
+        }
+        if (state.phase === TIMER_PHASE.running) {
+          clearTimeout(deadlineTimer);
+          const stopped = timer.stop();
+          stopFlash();
+          render(stopped.state);
+          return;
+        }
+        clearTimeout(deadlineTimer);
+        const dismissed = timer.dismiss();
+        quietAlert();
+        render(dismissed.state);
+      });
+
+      alertPracticeEl.addEventListener("click", () => {
+        clearTimeout(deadlineTimer);
+        cancelPendingPracticeNav();
+        quietAlert();
+        timer.dismiss();
+        goToPractice();
+      });
+
+      petEl.addEventListener("click", (event) => {
+        event.preventDefault();
+        schedulePracticeNav();
+      });
+
+      petEl.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        cancelPendingPracticeNav();
+        openCard(true);
+        const alerted = timer.triggerAlert();
+        clearTimeout(deadlineTimer);
+        raiseAlert();
+        render(alerted.state);
+      });
+
+      petEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          goToPractice();
+        }
+      });
+
+      window.setInterval(() => {
+        if (document.hidden) return;
+        if (timer.getState().phase === TIMER_PHASE.running) sync();
+      }, 250);
+
+      document.addEventListener("visibilitychange", () => {
+        sync();
+      });
+
+      applyLanguage();
+      render(timer.getState());
+
+      function sync(at = Date.now()) {
+        const event = timer.tick(at);
+        const state = timer.getState(at);
+        render(state);
+        if (event?.type === "completed") {
+          clearTimeout(deadlineTimer);
+          raiseAlert();
+        }
+      }
+
+      function render(state) {
+        const copy = getCopy(lang);
+        clockEl.textContent = formatClock(state.displayMs);
+        hintEl.textContent = copy.hint;
+        hintEl.hidden = state.phase !== TIMER_PHASE.idle;
+        statusEl.textContent =
+          state.phase === TIMER_PHASE.running
+            ? copy.running
+            : state.phase === TIMER_PHASE.alert
+              ? copy.alertShort
+              : "";
+        primaryEl.textContent =
+          state.phase === TIMER_PHASE.running
+            ? copy.stop
+            : state.phase === TIMER_PHASE.alert
+              ? copy.dismiss
+              : copy.start;
+        alertPracticeEl.hidden = state.phase !== TIMER_PHASE.alert;
+        alertPracticeEl.textContent = copy.alertPractice;
+        paintToggle();
+
+        for (const button of presetButtons) {
+          const preset = presetById(button.dataset.preset);
+          button.textContent = copy[preset.labelKey];
+          const selected = preset.id === (state.presetId ?? selectedId);
+          button.setAttribute("aria-pressed", selected ? "true" : "false");
+          button.disabled = state.phase !== TIMER_PHASE.idle;
+        }
+
+        pet.setPhase(state.phase);
+        pet.setLabel(copy.petLabel);
+        if (!flashTimer) document.title = formatClock(state.displayMs);
+      }
+
+      function raiseAlert() {
+        const copy = getCopy(lang);
+        openCard(true);
+        pet.replayAlert();
+        startFlash(copy);
+        notify(copy, line || copy.alertShort);
+      }
+
+      function quietAlert() {
+        stopFlash();
+        document.title = formatClock(timer.getState().displayMs);
+      }
+
+      function armDeadline(state) {
+        clearTimeout(deadlineTimer);
+        if (state.phase !== TIMER_PHASE.running || state.startedAt == null) return;
+        const endsAt = state.startedAt + state.durationMs;
+        deadlineTimer = window.setTimeout(() => sync(Date.now()), Math.max(0, endsAt - Date.now()));
+      }
+
+      function startFlash(copy) {
+        if (flashTimer) return;
+        const paint = () => {
+          flashOn = !flashOn;
+          document.title = flashOn ? copy.tabFlash : formatClock(timer.getState().displayMs);
+        };
+        paint();
+        flashTimer = window.setInterval(paint, 900);
+      }
+
+      function stopFlash() {
+        clearInterval(flashTimer);
+        flashTimer = 0;
+        flashOn = false;
+      }
+
+      function setLang(next) {
+        if (next === lang) return;
+        const wasAlert = timer.getState().phase === TIMER_PHASE.alert;
+        lang = next;
+        saveLang(lang);
+        applyLanguage();
+        if (cardOpen) refreshLine();
+        if (wasAlert && flashTimer) {
+          stopFlash();
+          startFlash(getCopy(lang));
+        }
+        render(timer.getState());
+      }
+
+      function applyLanguage() {
+        const copy = getCopy(lang);
+        document.documentElement.lang = lang === "en" ? "en" : "zh-Hant";
+        langZh.setAttribute("aria-pressed", lang === "zh" ? "true" : "false");
+        langEn.setAttribute("aria-pressed", lang === "en" ? "true" : "false");
+        presetsEl.setAttribute("aria-label", copy.presetsLabel);
+        document.querySelector(".lang").setAttribute("aria-label", copy.langLabel);
+        cheerEl.classList.toggle("is-zh", lang !== "en");
+        cheerEl.classList.toggle("is-en", lang === "en");
+        brandEl.textContent = copy.brand;
+        goPractice.textContent = copy.goPractice;
+        if (dockActions) dockActions.setAttribute("aria-label", copy.dockActionsLabel);
+        paintToggle();
+        const noscript = document.querySelector(".noscript");
+        if (noscript) noscript.textContent = copy.noscript;
+      }
+
+      function openCard(reroll) {
+        cardOpen = true;
+        shellEl.classList.add("is-open");
+        toggleEl.setAttribute("aria-expanded", "true");
+        if (reroll || !line) refreshLine();
+        else paintCheer();
+        paintToggle();
+      }
+
+      function closeCard() {
+        cardOpen = false;
+        shellEl.classList.remove("is-open");
+        toggleEl.setAttribute("aria-expanded", "false");
+        paintToggle();
+      }
+
+      function paintToggle() {
+        const copy = getCopy(lang);
+        toggleEl.textContent = cardOpen ? copy.collapse : copy.expand;
+      }
+
+      function paintCheer() {
+        cheerEl.textContent = line;
+        cheerEl.classList.toggle("is-zh", lang !== "en");
+        cheerEl.classList.toggle("is-en", lang === "en");
+      }
+
+      function refreshLine() {
+        const lines = ENCOURAGEMENTS[lang] ?? ENCOURAGEMENTS.zh;
+        let previous = "";
+        try {
+          previous = sessionStorage.getItem(LINE_KEY) || "";
+        } catch {
+          previous = line;
+        }
+        line = pickEncouragement(lines, previous);
+        try {
+          sessionStorage.setItem(LINE_KEY, line);
+        } catch {
+          /* private mode */
+        }
+        paintCheer();
+      }
+
+      function warmNotify() {
+        if (!("Notification" in window)) return;
+        if (Notification.permission !== "default") return;
+        Notification.requestPermission().catch(() => {});
+      }
+
+      function notify(copy, body) {
+        if (!("Notification" in window)) return;
+        const show = () => {
+          if (Notification.permission !== "granted") return;
+          try {
+            new Notification(copy.notifyTitle, { body, silent: true });
+          } catch {
+            /* constructor can reject when the page is hidden */
+          }
+        };
+        if (Notification.permission === "granted") {
+          show();
+          return;
+        }
+        if (Notification.permission !== "default") return;
+        Notification.requestPermission().then(show).catch(() => {});
+      }
+    </script>
+  </body>
+</html>
