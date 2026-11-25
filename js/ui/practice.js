@@ -808,31 +808,44 @@ export function bootPractice(root = document) {
       return;
     }
     downloadBtn.hidden = false;
-    const kindLabel = cardPayload.kindLabel || (cardPayload.kind === "complete" ? copy.cardComplete : copy.cardFragment);
-    const points = (cardPayload.points || [])
+    const display = techniqueCardDisplay(activeSet, cardPayload, copy, lang);
+    const points = display.points
       .map((p) => `<li>${escapeHtml(p)}</li>`)
       .join("");
     cardResult.className = `card-result is-${cardPayload.kind}`;
     cardResult.innerHTML = `
-      <div class="tech-card is-${escapeHtml(cardPayload.kind)}">
-        <div class="tech-card-art">
-          <img src="${escapeHtml(poseUrl(cardPayload.image))}" alt="" draggable="false" />
+      <article class="tech-card is-${escapeHtml(cardPayload.kind)}" aria-label="${escapeHtml(display.badge)}">
+        <header class="tech-card-head">
+          <span class="tech-badge">${escapeHtml(display.badge)}</span>
+          <span class="tech-set">${escapeHtml(display.setTitle)}</span>
+        </header>
+        <div class="tech-card-main">
+          <div class="tech-card-art">
+            <img src="${escapeHtml(poseUrl(cardPayload.image))}" alt="" draggable="false" />
+          </div>
+          <div class="tech-card-body">
+            <h3 class="tech-title-zh">${escapeHtml(display.titleZh)}</h3>
+            <p class="tech-title-en">${escapeHtml(display.titleEn)}</p>
+            <p class="tech-label">${escapeHtml(copy.cardPoints)}</p>
+            <ul class="tech-points">${points}</ul>
+            <div class="tech-foot">
+              <div class="tech-foot-block">
+                <p class="tech-label">${escapeHtml(copy.cardSource)}</p>
+                <p class="tech-field">${escapeHtml(display.source)}</p>
+              </div>
+              <div class="tech-foot-block">
+                <p class="tech-label">${escapeHtml(copy.cardEffect)}</p>
+                <p class="tech-field">${escapeHtml(display.effect)}</p>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="tech-card-body">
-          <p class="card-meta">${escapeHtml(kindLabel)} · ${escapeHtml(activeSet.title[lang] || activeSet.title.zh)}</p>
-          <h3>${escapeHtml(cardPayload.title)}</h3>
-          <p>${escapeHtml(cardPayload.cue)}</p>
-          <p class="tech-label">${escapeHtml(copy.cardPoints)}</p>
-          <ul class="tech-points">${points}</ul>
-          <p class="tech-label">${escapeHtml(copy.cardSource)}</p>
-          <p class="tech-field">${escapeHtml(cardPayload.source)}</p>
-          <p class="tech-label">${escapeHtml(copy.cardEffect)}</p>
-          <p class="tech-field">${escapeHtml(cardPayload.effect)}</p>
-        </div>
+      </article>
+      <div class="card-canvas-wrap" hidden>
+        <canvas id="card-canvas" width="720" height="960" aria-hidden="true"></canvas>
       </div>
-      <div class="card-canvas-wrap"><canvas id="card-canvas" width="640" height="400" aria-hidden="true"></canvas></div>
     `;
-    drawCardCanvas(root.querySelector("#card-canvas"), cardPayload, kindLabel, copy);
+    void prepareCardCanvas(root.querySelector("#card-canvas"), display, copy);
   }
 
   function paintMemory(copy) {
@@ -876,14 +889,64 @@ export function bootPractice(root = document) {
     speakText(`${stageWord}. ${breathWord}`, lang);
   }
 
-  function downloadCard() {
+  async function downloadCard() {
     const canvas = root.querySelector("#card-canvas");
     if (!canvas || !cardPayload) return;
+    const copy = getCopy(lang);
+    const display = techniqueCardDisplay(activeSet, cardPayload, copy, lang);
+    await prepareCardCanvas(canvas, display, copy);
     const a = document.createElement("a");
     a.href = canvas.toDataURL("image/png");
     a.download = `qi-pulse-${cardPayload.segmentId}.png`;
     a.click();
   }
+}
+
+/**
+ * Display-only fields for the end-of-practice technique card.
+ * Resolves zh+en titles from set data without changing card schema.
+ */
+function techniqueCardDisplay(set, payload, copy, lang) {
+  const names = bilingualTechniqueNames(set, payload.segmentId);
+  const idx = payload.fragmentIndex || 1;
+  const total = payload.fragmentTotal || set.segments.length || 1;
+  const badge =
+    payload.kind === "complete"
+      ? lang === "en"
+        ? "Complete"
+        : "完整"
+      : lang === "en"
+        ? `Fragment ${idx}/${total}`
+        : `碎片 ${idx}/${total}`;
+  const points = (payload.points || []).slice(0, 3).filter(Boolean);
+  const source = String(payload.source || "").trim();
+  const effect = String(payload.effect || "").trim();
+  return {
+    kind: payload.kind,
+    badge,
+    setTitle: set.title[lang] || set.title.zh,
+    titleZh: names.zh,
+    titleEn: names.en,
+    points,
+    source,
+    effect,
+    image: payload.image,
+    segmentId: payload.segmentId,
+  };
+}
+
+function bilingualTechniqueNames(set, segmentId) {
+  if (segmentId === "SET") {
+    return {
+      zh: set.title.zh || set.title.en || set.id,
+      en: set.title.en || set.title.zh || set.id,
+    };
+  }
+  const seg = set.segments.find((s) => s.id === segmentId);
+  return {
+    zh: seg?.title?.zh || seg?.title?.en || segmentId,
+    en: seg?.title?.en || seg?.title?.zh || segmentId,
+  };
 }
 
 function stageOf(phase) {
@@ -937,67 +1000,184 @@ function escapeHtml(text) {
     .replaceAll('"', "&quot;");
 }
 
-function drawCardCanvas(canvas, payload, kindLabel, copy) {
+async function prepareCardCanvas(canvas, display, copy) {
   if (!canvas) return;
+  try {
+    if (document.fonts?.ready) await document.fonts.ready;
+  } catch {
+    /* optional */
+  }
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
   const h = canvas.height;
-  const grad = ctx.createLinearGradient(0, 0, w, h);
-  if (payload.kind === "complete") {
-    grad.addColorStop(0, "#dff3ea");
-    grad.addColorStop(0.55, "#f7f1e4");
-    grad.addColorStop(1, "#e7f6ef");
-  } else {
-    grad.addColorStop(0, "#f3f6f4");
-    grad.addColorStop(1, "#efe8dc");
-  }
-  ctx.fillStyle = grad;
+  const complete = display.kind === "complete";
+  const radius = 48;
+  const img = await loadPoseImage(poseUrl(display.image));
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#e8f0ec";
   ctx.fillRect(0, 0, w, h);
 
-  const img = new Image();
-  img.onload = () => {
-    ctx.save();
-    ctx.globalAlpha = payload.kind === "complete" ? 0.92 : 0.78;
-    ctx.drawImage(img, w - 250, 40, 200, 200);
-    ctx.restore();
-    paintCardText(ctx, payload, kindLabel, copy, w, h);
-  };
-  img.onerror = () => paintCardText(ctx, payload, kindLabel, copy, w, h);
-  img.src = poseUrl(payload.image);
-  paintCardText(ctx, payload, kindLabel, copy, w, h);
+  roundRectPath(ctx, 28, 28, w - 56, h - 56, radius);
+  const body = ctx.createLinearGradient(0, 28, w, h);
+  if (complete) {
+    body.addColorStop(0, "#f7fcf9");
+    body.addColorStop(0.45, "#fffef9");
+    body.addColorStop(1, "#e7f5ee");
+  } else {
+    body.addColorStop(0, "#fbfcfb");
+    body.addColorStop(1, "#f3f1ea");
+  }
+  ctx.fillStyle = body;
+  ctx.fill();
+  ctx.lineWidth = complete ? 5 : 2;
+  ctx.strokeStyle = complete ? "#2f6f5e" : "rgba(47, 111, 94, 0.28)";
+  ctx.stroke();
+  if (complete) {
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(197, 160, 89, 0.85)";
+    roundRectPath(ctx, 38, 38, w - 76, h - 76, radius - 8);
+    ctx.stroke();
+  }
+
+  paintTechniqueCardCanvas(ctx, display, copy, w, h, img, complete);
 }
 
-function paintCardText(ctx, payload, kindLabel, copy, w, h) {
-  ctx.fillStyle = "#2f6f5e";
-  ctx.font = "700 28px Nunito, sans-serif";
-  ctx.fillText(kindLabel, 36, 52);
-  ctx.fillStyle = "#1c2a26";
-  ctx.font = "700 40px Nunito, sans-serif";
-  wrapText(ctx, payload.title, 36, 110, w - 300, 46);
+function paintTechniqueCardCanvas(ctx, display, copy, w, h, img, complete) {
+  const left = 64;
+  const contentW = w - 128;
+  const fontStack = "Nunito, 'Open Huninn', 'PingFang SC', 'Noto Sans CJK SC', sans-serif";
+  let y = 78;
+  ctx.textBaseline = "alphabetic";
+
+  // Badge
+  const badgePadX = 22;
+  ctx.font = `700 22px ${fontStack}`;
+  const badgeW = Math.ceil(ctx.measureText(display.badge).width) + badgePadX * 2;
+  const badgeH = 40;
+  roundRectPath(ctx, left, y, badgeW, badgeH, badgeH / 2);
+  ctx.fillStyle = complete ? "#2f6f5e" : "rgba(47, 111, 94, 0.12)";
+  ctx.fill();
+  ctx.fillStyle = complete ? "#f7fcf9" : "#2f6f5e";
+  ctx.textBaseline = "middle";
+  ctx.fillText(display.badge, left + badgePadX, y + badgeH / 2 + 1);
+  ctx.textBaseline = "alphabetic";
+
   ctx.fillStyle = "#5a6b64";
-  ctx.font = "500 22px Nunito, sans-serif";
-  wrapText(ctx, payload.cue, 36, 180, w - 300, 30);
-  ctx.fillStyle = "#2f6f5e";
-  ctx.font = "600 20px Nunito, sans-serif";
-  ctx.fillText(copy.cardEffect, 36, h - 70);
+  ctx.font = `600 20px ${fontStack}`;
+  ctx.fillText(display.setTitle, left + badgeW + 16, y + 28);
+  y += 70;
+
+  // Pose
+  if (img) {
+    const box = 200;
+    const ix = (w - box) / 2;
+    roundRectPath(ctx, ix - 8, y - 8, box + 16, box + 16, 28);
+    ctx.fillStyle = complete ? "rgba(217, 235, 228, 0.65)" : "rgba(255, 255, 252, 0.9)";
+    ctx.fill();
+    ctx.drawImage(img, ix, y, box, box);
+    y += box + 40;
+  } else {
+    y += 16;
+  }
+
+  // Titles — drawWrappedLines returns the next baseline slot
   ctx.fillStyle = "#1c2a26";
-  ctx.font = "500 20px Nunito, sans-serif";
-  wrapText(ctx, payload.effect, 36, h - 40, w - 72, 26);
+  ctx.font = `800 40px ${fontStack}`;
+  y = drawWrappedLines(ctx, display.titleZh, left, y, contentW, 50, 2) + 8;
+  ctx.fillStyle = "#5a6b64";
+  ctx.font = `600 24px ${fontStack}`;
+  y = drawWrappedLines(ctx, display.titleEn, left, y, contentW, 34, 2) + 18;
+
+  // Points
+  ctx.fillStyle = "#2f6f5e";
+  ctx.font = `700 18px ${fontStack}`;
+  ctx.fillText(copy.cardPoints, left, y);
+  y += 38;
+  ctx.fillStyle = "#1c2a26";
+  ctx.font = `600 22px ${fontStack}`;
+  for (const point of display.points) {
+    y = drawWrappedLines(ctx, `· ${point}`, left, y, contentW, 34, 2) + 10;
+  }
+  y += 12;
+
+  // Source (short, capped)
+  ctx.fillStyle = "#2f6f5e";
+  ctx.font = `700 18px ${fontStack}`;
+  ctx.fillText(copy.cardSource, left, y);
+  y += 34;
+  ctx.fillStyle = "#5a6b64";
+  ctx.font = `500 20px ${fontStack}`;
+  y = drawWrappedLines(ctx, display.source, left, y, contentW, 30, 3) + 14;
+
+  // Effect
+  ctx.fillStyle = "#2f6f5e";
+  ctx.font = `700 18px ${fontStack}`;
+  ctx.fillText(copy.cardEffect, left, y);
+  y += 34;
+  ctx.fillStyle = "#1c2a26";
+  ctx.font = `600 22px ${fontStack}`;
+  drawWrappedLines(ctx, display.effect, left, y, contentW, 32, 3);
+
+  ctx.fillStyle = "rgba(47, 111, 94, 0.55)";
+  ctx.font = `700 18px ${fontStack}`;
+  ctx.fillText("Qi-Pulse", left, h - 56);
 }
 
-function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-  const chars = String(text).split("");
+function loadPoseImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+/**
+ * Draw wrapped lines; `y` is the first baseline.
+ * @returns {number} baseline y for the next line after the block
+ */
+function drawWrappedLines(ctx, text, x, y, maxWidth, lineHeight, maxLines = 6) {
+  const raw = String(text || "").trim();
+  if (!raw) return y;
+  const chars = raw.split("");
+  const lines = [];
   let line = "";
-  let yy = y;
   for (const ch of chars) {
     const test = line + ch;
     if (ctx.measureText(test).width > maxWidth && line) {
-      ctx.fillText(line, x, yy);
+      lines.push(line);
       line = ch;
-      yy += lineHeight;
+      if (lines.length >= maxLines) break;
     } else {
       line = test;
     }
   }
-  if (line) ctx.fillText(line, x, yy);
+  if (lines.length < maxLines && line) {
+    lines.push(line);
+  } else if (lines.length >= maxLines) {
+    // Truncated by maxLines — ellipsize the last visible line.
+    let clipped = lines[maxLines - 1];
+    while (clipped.length > 1 && ctx.measureText(`${clipped}…`).width > maxWidth) {
+      clipped = clipped.slice(0, -1);
+    }
+    lines[maxLines - 1] = `${clipped}…`;
+  }
+  let yy = y;
+  for (let i = 0; i < lines.length; i += 1) {
+    ctx.fillText(lines[i], x, yy);
+    yy += lineHeight;
+  }
+  return yy;
 }

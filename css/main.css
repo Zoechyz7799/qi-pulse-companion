@@ -745,15 +745,11 @@ button,
 }
 
 .card-result {
-  border: 1px solid transparent;
-  border-radius: 18px;
+  border: 0;
+  border-radius: 28px;
   padding: 0;
   background: transparent;
   margin-bottom: 14px;
-}
-
-.card-result h3 {
-  margin: 0 0 6px;
 }
 
 .card-meta {
@@ -764,78 +760,150 @@ button,
 
 .tech-card {
   display: grid;
-  grid-template-columns: minmax(110px, 34%) 1fr;
-  gap: 14px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 14px;
+  gap: 16px;
+  border: 1.5px solid rgba(47, 111, 94, 0.22);
+  border-radius: 28px;
+  padding: 18px 18px 20px;
   background:
-    linear-gradient(145deg, rgba(247, 250, 248, 0.96), rgba(243, 239, 230, 0.92));
+    linear-gradient(160deg, rgba(251, 252, 251, 0.96), rgba(243, 241, 234, 0.94));
+  box-shadow: 0 10px 28px rgba(28, 42, 38, 0.05);
 }
 
 .tech-card.is-fragment {
+  border-color: rgba(47, 111, 94, 0.18);
   background:
-    linear-gradient(145deg, rgba(247, 250, 248, 0.9), rgba(236, 232, 224, 0.95));
-  clip-path: polygon(0 0, 100% 0, 100% 86%, 92% 100%, 0 100%);
+    linear-gradient(160deg, rgba(252, 253, 252, 0.94), rgba(241, 239, 233, 0.96));
+  box-shadow: none;
 }
 
 .tech-card.is-complete {
-  border-color: rgba(47, 111, 94, 0.35);
-  box-shadow: var(--glow);
+  border-width: 2.5px;
+  border-color: #2f6f5e;
+  box-shadow:
+    0 0 0 1px rgba(197, 160, 89, 0.55),
+    0 12px 32px rgba(47, 111, 94, 0.14);
   background:
-    radial-gradient(80% 70% at 90% 10%, rgba(180, 230, 210, 0.45), transparent 55%),
-    linear-gradient(145deg, #f7fcf9, #f4efe6);
+    radial-gradient(70% 55% at 88% 8%, rgba(180, 230, 210, 0.42), transparent 58%),
+    linear-gradient(160deg, #f7fcf9, #fffef9 48%, #eef6f1);
+}
+
+.tech-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.tech-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.85rem;
+  padding: 0.28rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: rgba(47, 111, 94, 0.1);
+  border: 1px solid rgba(47, 111, 94, 0.14);
+}
+
+.tech-card.is-complete .tech-badge {
+  color: #f7fcf9;
+  background: #2f6f5e;
+  border-color: rgba(197, 160, 89, 0.75);
+  box-shadow: 0 0 0 1px rgba(197, 160, 89, 0.35);
+}
+
+.tech-set {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.tech-card-main {
+  display: grid;
+  grid-template-columns: minmax(108px, 32%) 1fr;
+  gap: 16px;
+  align-items: start;
 }
 
 .tech-card-art {
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  background: rgba(255, 255, 252, 0.7);
-  min-height: 140px;
+  border-radius: 22px;
+  background: rgba(255, 255, 252, 0.78);
+  min-height: 148px;
+  padding: 10px;
+}
+
+.tech-card.is-complete .tech-card-art {
+  background: rgba(217, 235, 228, 0.45);
 }
 
 .tech-card-art img {
-  width: min(140px, 100%);
+  width: min(148px, 100%);
   height: auto;
-  filter: drop-shadow(0 8px 14px rgba(28, 42, 38, 0.12));
+  filter: drop-shadow(0 8px 14px rgba(28, 42, 38, 0.1));
 }
 
-.tech-card-body h3 {
-  font-size: 1.25rem;
+.tech-title-zh {
+  margin: 0 0 2px;
+  font-size: clamp(1.35rem, 3.4vw, 1.7rem);
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.tech-title-en {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .tech-label {
-  margin: 10px 0 4px;
+  margin: 0 0 4px;
   color: var(--accent);
-  font-size: 0.8rem;
-  letter-spacing: 0.04em;
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .tech-points {
-  margin: 0;
-  padding-left: 1.1em;
+  margin: 0 0 14px;
+  padding-left: 1.05em;
   color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.tech-points li + li {
+  margin-top: 0.28em;
+}
+
+.tech-foot {
+  display: grid;
+  gap: 10px;
+}
+
+.tech-foot-block {
+  padding-top: 8px;
+  border-top: 1px solid rgba(207, 220, 213, 0.7);
 }
 
 .tech-field {
   margin: 0;
   color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
 }
 
-.card-canvas-wrap {
-  display: flex;
-  justify-content: center;
-  margin: 12px 0 4px;
-}
-
-.card-canvas-wrap canvas {
-  width: min(320px, 100%);
-  height: auto;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+.card-canvas-wrap[hidden] {
+  display: none !important;
 }
 
 .memory {
@@ -887,7 +955,11 @@ button,
 }
 
 @media (max-width: 560px) {
-  .tech-card {
+  .tech-card-main {
     grid-template-columns: 1fr;
+  }
+
+  .tech-card-art {
+    min-height: 120px;
   }
 }
