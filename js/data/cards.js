@@ -38,8 +38,8 @@
  */
 
 const SOURCE = Object.freeze({
-  zh: "健身气功·易筋经 · 国家体育总局",
-  en: "Health Qigong · Yi Jin Jing · General Administration of Sport of China",
+  zh: "招式名稱參照國家體育總局公開的易筋經介紹，此處僅作舒展順序參考",
+  en: "Form names follow the General Administration of Sport of China's public Yi Jin Jing introduction; used here only as a stretch-sequence reference.",
 });
 
 /** Contest timing ≈ move 2s + hold 3s per step; keep demo playable. */
@@ -113,18 +113,41 @@ function move(spec) {
   });
 }
 
+/** Stage-synced breath: 起→吸氣, 停→自然呼吸, 收→呼氣 */
+export const STAGE_BREATH = Object.freeze({
+  rise: Object.freeze({ zh: "吸氣", en: "Inhale" }),
+  hold: Object.freeze({ zh: "自然呼吸", en: "Breathe naturally" }),
+  close: Object.freeze({ zh: "呼氣", en: "Exhale" }),
+});
+
 const BREATH = {
-  natural: { zh: "自然呼吸", en: "Natural breath" },
-  in: { zh: "自然吸气", en: "Inhale gently" },
-  out: { zh: "自然呼气", en: "Exhale gently" },
+  natural: STAGE_BREATH.hold,
+  in: STAGE_BREATH.rise,
+  out: STAGE_BREATH.close,
 };
 
+/** @param {'prep'|'hold'|'breathe'|'rest'} phase */
+export function breathForPhase(phase) {
+  if (phase === "prep") return STAGE_BREATH.rise;
+  if (phase === "rest") return STAGE_BREATH.close;
+  return STAGE_BREATH.hold;
+}
+
 /** @type {MoveSet} */
-export const SAMPLE_SET = Object.freeze({
-  id: "yijinjing-12",
+export const YIJIN_SET = Object.freeze({
+  id: "yijin",
   title: Object.freeze({
-    zh: "健身气功·易筋经十二势",
-    en: "Health Qigong · Yi Jin Jing (12 Forms)",
+    zh: "易筋經十二勢",
+    en: "Twelve Tendon-Changing Forms",
+  }),
+  shortTitle: Object.freeze({ zh: "易筋經", en: "Yi Jin Jing" }),
+  completeCue: Object.freeze({
+    zh: "十二勢皆練完，易筋經整套招式卡完成。",
+    en: "All twelve forms practiced — the Yi Jin Jing set card is complete.",
+  }),
+  completeEffect: Object.freeze({
+    zh: "完整易筋經一遍：安定、開展、延展與從容收勢。",
+    en: "A full Yi Jin Jing pass: settle, open, lengthen, and close with ease.",
   }),
   segments: Object.freeze([
     move({
@@ -490,6 +513,166 @@ export const SAMPLE_SET = Object.freeze({
   ]),
 });
 
+
+function wushuMove(spec) {
+  const rise = STAGE_BREATH.rise;
+  const hold = STAGE_BREATH.hold;
+  const close = STAGE_BREATH.close;
+  const stages = Object.freeze([
+    stage("prep", "rest", spec.riseCue, rise, "rest"),
+    stage("hold", spec.heroPose, spec.holdCue, hold, spec.check || "rest"),
+    stage("breathe", spec.heroPose, spec.holdCue, hold, spec.check || "rest"),
+    stage("rest", "rest", spec.closeCue, close, "rest"),
+  ]);
+  return Object.freeze({
+    id: spec.id,
+    title: Object.freeze(spec.title),
+    short: Object.freeze(spec.short),
+    cue: Object.freeze(spec.cue),
+    points: Object.freeze(spec.points.map((p) => Object.freeze(p))),
+    source: Object.freeze(spec.source),
+    effect: Object.freeze(spec.effect),
+    view: Object.freeze(spec.view || { zh: "正對鏡頭", en: "Face the camera" }),
+    coverage: Object.freeze(spec.coverage || { zh: "跟著看山圖示節奏練習。", en: "Follow Kanshan's guide rhythm." }),
+    pose: POSE_CLIP[spec.heroPose] || spec.pose || "idle.webp",
+    stages,
+    durationsMs: Object.freeze(spec.durationsMs || { prep: 3000, hold: 5000, breathe: 6000, rest: 2000 }),
+  });
+}
+
+/** Classic three-form stretch set (kept selectable alongside 易筋經). */
+export const WUSHU_THREE_SET = Object.freeze({
+  id: "wushu-three",
+  title: Object.freeze({ zh: "武術三式", en: "Wushu Three" }),
+  shortTitle: Object.freeze({ zh: "三式", en: "Three Forms" }),
+  completeCue: Object.freeze({
+    zh: "三式皆練完，整套招式卡完成。",
+    en: "All three techniques practiced — the set card is complete.",
+  }),
+  completeEffect: Object.freeze({
+    zh: "穩定下盤、開肩、釋放久坐張力。",
+    en: "Steadies the base, opens the shoulders, eases desk tension.",
+  }),
+  segments: Object.freeze([
+    wushuMove({
+      id: "ready-fists",
+      title: { zh: "并步對拳", en: "Ready Stance & Twin Fists" },
+      short: { zh: "對拳預備", en: "Ready fists" },
+      cue: {
+        zh: "雙腳並立與肩同寬，雙手握拳收於腰間，目視前方。",
+        en: "Feet under the shoulders; fists at the waist; eyes forward.",
+      },
+      riseCue: { zh: "鬆肩，雙腳站穩", en: "Soften the shoulders; plant the feet" },
+      holdCue: { zh: "雙手握拳收於腰間，目視前方", en: "Fists at the waist; eyes forward" },
+      closeCue: { zh: "輕輕放鬆雙手", en: "Ease the hands" },
+      heroPose: "rest",
+      check: "rest",
+      pose: "idle.webp",
+      points: [
+        { zh: "雙腳並立與肩同寬，雙手握拳收於腰間，目視前方。", en: "Feet under the shoulders; fists at the waist; eyes forward." },
+      ],
+      source: { zh: "長拳基本功", en: "Changquan fundamentals" },
+      effect: { zh: "穩定下盤，喚醒肩背。", en: "Steadies the base and wakes the shoulders and back." },
+      durationsMs: { prep: 3000, hold: 5000, breathe: 6000, rest: 2000 },
+    }),
+    wushuMove({
+      id: "heroic-block",
+      title: { zh: "馬步架掌", en: "Heroic Overhead Block" },
+      short: { zh: "馬步架掌", en: "Horse-stance block" },
+      cue: {
+        zh: "馬步站穩，一手上架護頭，一手下按，核心收緊。",
+        en: "Horse stance; one palm guards overhead, the other presses down.",
+      },
+      riseCue: { zh: "開步成馬步，準備架掌", en: "Open into horse stance" },
+      holdCue: { zh: "一手上架護頭，一手下按", en: "One palm overhead, one pressing down" },
+      closeCue: { zh: "緩緩收回雙手", en: "Draw the hands back slowly" },
+      heroPose: "sky",
+      check: "sky",
+      pose: "laptop.webp",
+      points: [
+        { zh: "馬步站穩，一手上架護頭，一手下按，核心收緊。", en: "Horse stance; one palm guards overhead, the other presses down." },
+      ],
+      source: { zh: "長拳/少林基本功", en: "Changquan / Shaolin basics" },
+      effect: { zh: "開肩、強化核心穩定。", en: "Opens the shoulders and strengthens core stability." },
+      durationsMs: { prep: 3000, hold: 6000, breathe: 6000, rest: 2000 },
+    }),
+    wushuMove({
+      id: "bow-push",
+      title: { zh: "弓步推掌", en: "Bow-Stance Palm Push" },
+      short: { zh: "弓步推掌", en: "Bow-stance push" },
+      cue: {
+        zh: "前弓後蹬，雙手向前推掌，腰腹發力。",
+        en: "Front knee bent, rear leg drives; palms push forward.",
+      },
+      riseCue: { zh: "前腳跨出，準備推掌", en: "Step forward; prepare to push" },
+      holdCue: { zh: "雙手向前推掌，腰腹發力", en: "Push both palms forward from the waist" },
+      closeCue: { zh: "收回雙掌，站穩", en: "Draw the palms back; stand steady" },
+      heroPose: "push",
+      check: "push",
+      pose: "sway.webp",
+      points: [
+        { zh: "前弓後蹬，雙手向前推掌，腰腹發力。", en: "Front knee bent, rear leg drives; palms push forward." },
+      ],
+      source: { zh: "長拳/太極推手基礎", en: "Changquan / Taiji push-hands base" },
+      effect: { zh: "拉伸髖部與肩，釋放久坐張力。", en: "Stretches hips and shoulders; eases desk tension." },
+      durationsMs: { prep: 3000, hold: 5000, breathe: 5000, rest: 2000 },
+    }),
+  ]),
+});
+
+/** @deprecated Alias kept for older tests; prefer YIJIN_SET / getSet(). */
+export const SAMPLE_SET = YIJIN_SET;
+
+/** Optional legacy id → yijin. */
+export const YIJINJING_12_ALIAS = "yijinjing-12";
+
+export const SETS = Object.freeze({
+  yijin: YIJIN_SET,
+  "wushu-three": WUSHU_THREE_SET,
+});
+
+export const SET_ORDER = Object.freeze(["yijin", "wushu-three"]);
+
+/** @param {string} id */
+export function getSet(id) {
+  if (id === YIJINJING_12_ALIAS) return YIJIN_SET;
+  return SETS[id] || YIJIN_SET;
+}
+
+export function loadSelectedSetId() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return "yijin";
+    const parsed = JSON.parse(raw);
+    const id = parsed?.selectedSetId;
+    if (id === YIJINJING_12_ALIAS) return "yijin";
+    if (SETS[id]) return id;
+  } catch {
+    /* private mode */
+  }
+  return "yijin";
+}
+
+/** @param {string} id */
+export function saveSelectedSetId(id) {
+  const next = SETS[id] ? id : "yijin";
+  try {
+    let prev = {};
+    try {
+      prev = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") || {};
+    } catch {
+      prev = {};
+    }
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({ ...prev, selectedSetId: next }),
+    );
+  } catch {
+    /* private mode */
+  }
+  return next;
+}
+
 /** @deprecated Prefer segment.stages; kept for older callers. */
 export const STAGE_POSES = Object.freeze({
   prep: "idle.webp",
@@ -622,18 +805,16 @@ export function buildCardPayload(set, segmentId, lang, cardState, progress) {
     ? set.title[lang] || set.title.zh
     : segment?.title[lang] || segment?.title.zh || segmentId;
   const cue = isSet
-    ? lang === "en"
-      ? "All twelve forms practiced — the Yi Jin Jing set card is complete."
-      : "十二势皆练完，易筋经整套招式卡完成。"
+    ? set.completeCue?.[lang] || set.completeCue?.zh || set.title[lang] || set.title.zh
     : segment?.cue[lang] || segment?.cue.zh || "";
   const points = isSet
     ? set.segments.map((s) => s.title[lang] || s.title.zh)
     : (segment?.points || []).map((p) => p[lang] || p.zh);
-  const source = SOURCE[lang] || SOURCE.zh;
+  const source = isSet
+    ? SOURCE[lang] || SOURCE.zh
+    : segment?.source?.[lang] || segment?.source?.zh || SOURCE[lang] || SOURCE.zh;
   const effect = isSet
-    ? lang === "en"
-      ? "A full Yi Jin Jing pass: settle, open, lengthen, and close with ease."
-      : "完整易筋经一遍：安定、开展、延展与从容收势。"
+    ? set.completeEffect?.[lang] || set.completeEffect?.zh || ""
     : segment?.effect[lang] || segment?.effect.zh || "";
   const image = isSet ? "wave.webp" : segment?.pose || "idle.webp";
   const kind = isSet && cardState.complete ? "complete" : "fragment";

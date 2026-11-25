@@ -485,8 +485,20 @@ button,
   box-shadow: var(--glow);
 }
 
+.guide-stage.is-natural {
+  box-shadow: inset 0 0 0 1px rgba(47, 111, 94, 0.12);
+}
+
 .guide-stage.is-exhale {
   box-shadow: 0 0 0 1px rgba(47, 111, 94, 0.18), 0 0 18px rgba(180, 140, 80, 0.2);
+}
+
+.guide-stage[data-stage="rise"] .guide-pose {
+  animation: guide-breathe 3.2s ease-in-out infinite;
+}
+
+.guide-stage[data-stage="close"] .guide-pose {
+  animation: guide-breathe 3.8s ease-in-out infinite reverse;
 }
 
 .guide-pose {
@@ -583,6 +595,13 @@ button,
   background: rgba(255, 255, 252, 0.9);
   box-shadow: var(--glow);
   animation: breath-pulse 1.6s ease-in-out infinite;
+}
+
+.breath-glow[data-breath="natural"] {
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  box-shadow: 0 0 0 1px rgba(47, 111, 94, 0.18);
+  animation: none;
 }
 
 .breath-glow[data-breath="out"] {

@@ -10,14 +10,17 @@ import {
 } from "../core/practiceFSM.js";
 import { createCameraFSM } from "../core/cameraFSM.js";
 import {
-  SAMPLE_SET,
   applySession,
+  breathForPhase,
   buildCardPayload,
   endCardForSession,
+  getSet,
   listCollectedCards,
   loadProgress,
+  loadSelectedSetId,
   poseUrl,
   saveProgress,
+  saveSelectedSetId,
   stageForPhase,
 } from "../data/cards.js";
 import {
@@ -25,7 +28,7 @@ import {
   getCopy,
   loadLang,
   saveLang,
-  speakEnglish,
+  speakText,
   unlockSpeech,
 } from "../locale.js";
 import { createPoseTracker } from "../../pose-worker.js";
@@ -46,6 +49,11 @@ export function bootPractice(root = document) {
   const disclaimerSkip = root.querySelector("#disclaimer-skip");
   const disclaimerAccept = root.querySelector("#disclaimer-accept");
 
+  const chooseSetTitle = root.querySelector("#choose-set-title");
+  const setYijinBtn = root.querySelector("#set-yijin");
+  const setWushuBtn = root.querySelector("#set-wushu");
+  const setYijinLabel = root.querySelector("#set-yijin-label");
+  const setWushuLabel = root.querySelector("#set-wushu-label");
   const chooseTitle = root.querySelector("#choose-title");
   const modeSegmentBtn = root.querySelector("#mode-segment");
   const modeFullBtn = root.querySelector("#mode-full");
@@ -84,9 +92,9 @@ export function bootPractice(root = document) {
   let cardPayload = null;
   let tickTimer = 0;
   let activeCheck = "rest";
-
-  const practice = createPracticeFSM({
-    set: SAMPLE_SET,
+  let activeSet = getSet(loadSelectedSetId());
+  let practice = createPracticeFSM({
+    set: activeSet,
     isComplete: (id) => Boolean(progress.completedSegments[id]),
   });
 
@@ -123,6 +131,8 @@ export function bootPractice(root = document) {
     practice.acceptDisclaimer();
     render();
   });
+  setYijinBtn?.addEventListener("click", () => selectSet("yijin"));
+  setWushuBtn?.addEventListener("click", () => selectSet("wushu-three"));
   modeSegmentBtn.addEventListener("click", () => {
     selectedMode = PRACTICE_MODE.segment;
     const state = practice.getState();
@@ -135,7 +145,7 @@ export function bootPractice(root = document) {
     render();
   });
   beginBtn.addEventListener("click", () => {
-    if (lang === "en") unlockSpeech();
+    unlockSpeech(lang);
     practice.selectMode(selectedMode, practice.getState().segmentIndex);
     practice.begin();
     armTick();
@@ -145,6 +155,7 @@ export function bootPractice(root = document) {
   interruptBtn.addEventListener("click", () => {
     const event = practice.interrupt();
     clearInterval(tickTimer);
+    cancelSpeech();
     persistSession(event.state);
     void camera.stop();
     render();
@@ -152,6 +163,7 @@ export function bootPractice(root = document) {
   finishBtn.addEventListener("click", () => {
     const event = practice.finishEarly();
     clearInterval(tickTimer);
+    cancelSpeech();
     persistSession(event.state);
     void camera.stop();
     render();
@@ -192,17 +204,38 @@ export function bootPractice(root = document) {
     }, 200);
   }
 
+  function selectSet(id) {
+    const next = getSet(id);
+    if (next.id === activeSet.id) {
+      render();
+      return;
+    }
+    activeSet = next;
+    saveSelectedSetId(next.id);
+    selectedMode = PRACTICE_MODE.segment;
+    const screen = practice.getState().screen;
+    practice = createPracticeFSM({
+      set: activeSet,
+      isComplete: (segId) => Boolean(progress.completedSegments[segId]),
+    });
+    // Set picker lives on the choose screen; keep the user there after switching.
+    if (screen !== PRACTICE_SCREEN.disclaimer) {
+      practice.skipDisclaimer();
+    }
+    render();
+  }
+
   function persistSession(state) {
-    progress = applySession(progress, SAMPLE_SET, state.completedSegmentIds, {
+    progress = applySession(progress, activeSet, state.completedSegmentIds, {
       durationMs: state.elapsedMs,
       interrupts: state.interrupts,
       finished: state.finished,
     });
     saveProgress(progress);
-    // Single segment → fragment only; complete SET only when all three are done.
+    // Single segment → fragment only; complete SET only when all moves are done.
     cardPayload = endCardForSession(
       progress,
-      SAMPLE_SET,
+      activeSet,
       state.completedSegmentIds,
       lang,
     );
@@ -216,10 +249,10 @@ export function bootPractice(root = document) {
     if (cardPayload) {
       const key =
         cardPayload.segmentId === "SET"
-          ? `${SAMPLE_SET.id}:SET`
-          : `${SAMPLE_SET.id}:${cardPayload.segmentId}`;
+          ? `${activeSet.id}:SET`
+          : `${activeSet.id}:${cardPayload.segmentId}`;
       cardPayload = buildCardPayload(
-        SAMPLE_SET,
+        activeSet,
         cardPayload.segmentId,
         lang,
         progress.cards[key] || {
@@ -230,7 +263,7 @@ export function bootPractice(root = document) {
       );
     }
     render();
-    if (lang === "en" && practice.getState().screen === PRACTICE_SCREEN.active) {
+    if (practice.getState().screen === PRACTICE_SCREEN.active) {
       speakCue();
     } else {
       cancelSpeech();
@@ -248,6 +281,15 @@ export function bootPractice(root = document) {
     disclaimerBody.textContent = copy.disclaimerBody;
     disclaimerSkip.textContent = copy.disclaimerSkip;
     disclaimerAccept.textContent = copy.disclaimerAccept;
+    if (chooseSetTitle) chooseSetTitle.textContent = copy.chooseSet;
+    if (setYijinLabel) {
+      const yijin = getSet("yijin");
+      setYijinLabel.textContent = yijin.title[lang] || yijin.title.zh;
+    }
+    if (setWushuLabel) {
+      const wushu = getSet("wushu-three");
+      setWushuLabel.textContent = wushu.title[lang] || wushu.title.zh;
+    }
     chooseTitle.textContent = copy.chooseMode;
     modeSegmentBtn.querySelector(".mode-label").textContent = copy.modeSegment;
     modeFullBtn.querySelector(".mode-label").textContent = copy.modeFull;
@@ -272,7 +314,12 @@ export function bootPractice(root = document) {
       el.hidden = state.screen !== name;
     }
 
-    const rec = SAMPLE_SET.segments[state.recommendedIndex];
+    setYijinBtn?.setAttribute("aria-pressed", activeSet.id === "yijin" ? "true" : "false");
+    setWushuBtn?.setAttribute(
+      "aria-pressed",
+      activeSet.id === "wushu-three" ? "true" : "false",
+    );
+    const rec = activeSet.segments[state.recommendedIndex];
     segmentRecommend.textContent = rec
       ? `${copy.recommended}: ${rec.title[lang] || rec.title.zh}`
       : "";
@@ -308,8 +355,9 @@ export function bootPractice(root = document) {
     guideStage.dataset.stage = stage;
     guideStage.dataset.check = stageSpec?.check || "";
     guideStage.dataset.move = seg.id;
-    guideStage.classList.toggle("is-inhale", state.phase === PRACTICE_PHASE.breathe && state.phaseProgress < 0.5);
-    guideStage.classList.toggle("is-exhale", state.phase === PRACTICE_PHASE.breathe && state.phaseProgress >= 0.5);
+    guideStage.classList.toggle("is-inhale", stage === "rise");
+    guideStage.classList.toggle("is-exhale", stage === "close");
+    guideStage.classList.toggle("is-natural", stage === "hold");
     stageBadge.textContent = stageBadgeText(copy, stage);
     segmentLabel.textContent = seg.title[lang] || seg.title.zh;
     const cue =
@@ -318,15 +366,12 @@ export function bootPractice(root = document) {
       seg.cue.zh;
     cueLabel.textContent = cue;
     phaseLabel.textContent = phaseText(copy, state.phase);
-    const breathing = state.phase === PRACTICE_PHASE.breathe;
-    breathLabel.hidden = !breathing;
-    if (breathing) {
-      const breath =
-        (stageSpec?.breath && (stageSpec.breath[lang] || stageSpec.breath.zh)) ||
-        breathHint(copy, state.phaseProgress);
-      breathLabel.textContent = breath;
-      breathLabel.dataset.breath = state.phaseProgress < 0.5 ? "in" : "out";
-    }
+    const breath = breathForPhase(state.phase);
+    const breathText = breath[lang] || breath.zh;
+    breathLabel.hidden = false;
+    breathLabel.textContent = breathText;
+    breathLabel.dataset.breath =
+      stage === "rise" ? "in" : stage === "close" ? "out" : "natural";
     progressFill.style.width = `${Math.round(state.phaseProgress * 100)}%`;
     syncTrackerCheck(stageSpec?.check || "rest");
   }
@@ -400,7 +445,7 @@ export function bootPractice(root = document) {
           <img src="${escapeHtml(poseUrl(cardPayload.image))}" alt="" draggable="false" />
         </div>
         <div class="tech-card-body">
-          <p class="card-meta">${escapeHtml(kindLabel)} · ${escapeHtml(SAMPLE_SET.title[lang] || SAMPLE_SET.title.zh)}</p>
+          <p class="card-meta">${escapeHtml(kindLabel)} · ${escapeHtml(activeSet.title[lang] || activeSet.title.zh)}</p>
           <h3>${escapeHtml(cardPayload.title)}</h3>
           <p>${escapeHtml(cardPayload.cue)}</p>
           <p class="tech-label">${escapeHtml(copy.cardPoints)}</p>
@@ -417,7 +462,7 @@ export function bootPractice(root = document) {
   }
 
   function paintMemory(copy) {
-    const items = listCollectedCards(progress, SAMPLE_SET, lang);
+    const items = listCollectedCards(progress, activeSet, lang);
     if (!items.length) {
       memoryGrid.innerHTML = `<p class="card-meta">${escapeHtml(copy.memoryEmpty)}</p>`;
       return;
@@ -439,17 +484,25 @@ export function bootPractice(root = document) {
   }
 
   function speakCue() {
-    if (lang !== "en") {
+    const state = practice.getState();
+    if (!state.segment || state.screen !== PRACTICE_SCREEN.active) {
       cancelSpeech();
       return;
     }
-    const state = practice.getState();
-    if (!state.segment) return;
     const copy = getCopy(lang);
+    const stage = stageOf(state.phase);
     const stageSpec = stageForPhase(state.segment, state.phase);
-    const cue = stageSpec?.cue?.en || state.segment.cue.en;
-    const text = `${state.segment.title.en}. ${phaseText(copy, state.phase)}. ${cue}`;
-    speakEnglish(text);
+    const breath = breathForPhase(state.phase);
+    const title = state.segment.title[lang] || state.segment.title.zh;
+    const stageWord = stageBadgeText(copy, stage);
+    const breathWord = breath[lang] || breath.zh;
+    const cue =
+      (stageSpec?.cue && (stageSpec.cue[lang] || stageSpec.cue.zh)) ||
+      state.segment.cue[lang] ||
+      state.segment.cue.zh;
+    // Stage (起/停/收) + breath, then short move cue.
+    const text = `${title}. ${stageWord}. ${breathWord}. ${cue}`;
+    speakText(text, lang);
   }
 
   function downloadCard() {
@@ -495,10 +548,6 @@ function phaseText(copy, phase) {
   if (phase === PRACTICE_PHASE.hold) return copy.phaseHold;
   if (phase === PRACTICE_PHASE.breathe) return copy.phaseBreathe;
   return copy.phaseRest;
-}
-
-function breathHint(copy, progress) {
-  return progress < 0.5 ? copy.breatheIn : copy.breatheOut;
 }
 
 function formatDuration(ms, copy) {

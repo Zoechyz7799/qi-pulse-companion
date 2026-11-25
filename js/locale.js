@@ -59,6 +59,7 @@ const COPY = Object.freeze({
     disclaimerSkip: "跳過",
     disclaimerAccept: "我了解了",
     chooseMode: "選擇練習方式",
+    chooseSet: "選擇套路",
     modeSegment: "練這一段",
     modeFull: "連續練完整套",
     recommended: "推薦（未完成）",
@@ -70,8 +71,9 @@ const COPY = Object.freeze({
     stageRise: "起",
     stageHold: "停",
     stageClose: "收",
-    breatheIn: "吸",
-    breatheOut: "呼",
+    breatheIn: "吸氣",
+    breatheNatural: "自然呼吸",
+    breatheOut: "呼氣",
     progress: "節奏",
     openCamera: "一鍵開啟本地攝像頭",
     closeCamera: "關閉攝像頭",
@@ -128,6 +130,7 @@ const COPY = Object.freeze({
     disclaimerSkip: "Skip",
     disclaimerAccept: "I understand",
     chooseMode: "Choose a mode",
+    chooseSet: "Choose a set",
     modeSegment: "This segment",
     modeFull: "Full set",
     recommended: "Suggested (incomplete)",
@@ -139,8 +142,9 @@ const COPY = Object.freeze({
     stageRise: "Rise",
     stageHold: "Hold",
     stageClose: "Close",
-    breatheIn: "In",
-    breatheOut: "Out",
+    breatheIn: "Inhale",
+    breatheNatural: "Breathe naturally",
+    breatheOut: "Exhale",
     progress: "Rhythm",
     openCamera: "Enable local camera",
     closeCamera: "Turn camera off",
@@ -199,12 +203,23 @@ export function pickEncouragement(lines, previous = "", random = Math.random) {
   return pool[index];
 }
 
-export function speakEnglish(text) {
+/**
+ * Prefer natural zh-CN/zh-HK (~0.9–1.0) or en-US/en-GB (~0.9). Fail silently.
+ * @param {string} text
+ * @param {'zh'|'en'} [lang]
+ */
+export function speakText(text, lang = "zh") {
   if (!("speechSynthesis" in window) || !text) return;
   try {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-US";
-    utterance.rate = 0.96;
+    const utterance = new SpeechSynthesisUtterance(String(text));
+    const voice = pickVoice(lang);
+    if (voice) {
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+    } else {
+      utterance.lang = lang === "en" ? "en-US" : "zh-CN";
+    }
+    utterance.rate = lang === "en" ? 0.9 : 0.95;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   } catch {
@@ -212,16 +227,59 @@ export function speakEnglish(text) {
   }
 }
 
-export function unlockSpeech() {
+/** @deprecated Prefer speakText(text, 'en') */
+export function speakEnglish(text) {
+  speakText(text, "en");
+}
+
+/**
+ * @param {'zh'|'en'} lang
+ */
+export function unlockSpeech(lang = "en") {
   if (!("speechSynthesis" in window)) return;
   try {
+    // Warm voices list (async on some browsers).
+    window.speechSynthesis.getVoices();
     const utterance = new SpeechSynthesisUtterance(" ");
     utterance.volume = 0;
-    utterance.lang = "en-US";
+    utterance.lang = lang === "en" ? "en-US" : "zh-CN";
     window.speechSynthesis.speak(utterance);
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * @param {'zh'|'en'} lang
+ * @returns {SpeechSynthesisVoice | null}
+ */
+function pickVoice(lang) {
+  let voices = [];
+  try {
+    voices = window.speechSynthesis.getVoices() || [];
+  } catch {
+    return null;
+  }
+  if (!voices.length) return null;
+
+  const prefer =
+    lang === "en"
+      ? ["en-US", "en-GB", "en_US", "en_GB", "en"]
+      : ["zh-CN", "zh-HK", "zh-TW", "zh_CN", "zh_HK", "zh_TW", "cmn", "zh"];
+
+  for (const code of prefer) {
+    const hit = voices.find((v) => {
+      const id = `${v.lang || ""}`.toLowerCase().replace("_", "-");
+      const want = code.toLowerCase().replace("_", "-");
+      return id === want || id.startsWith(`${want}-`) || id.startsWith(want);
+    });
+    if (hit) return hit;
+  }
+
+  if (lang === "en") {
+    return voices.find((v) => /en/i.test(v.lang)) || null;
+  }
+  return voices.find((v) => /zh|cmn|chinese/i.test(`${v.lang} ${v.name}`)) || null;
 }
 
 export function cancelSpeech() {
