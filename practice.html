@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>練習 · 氣脈陪練</title>
+    <link rel="icon" href="./public/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./css/main.css" />
+  </head>
+  <body>
+    <noscript><p class="noscript">這個頁面需要 JavaScript。</p></noscript>
+    <div class="practice-page">
+      <header class="practice-header">
+        <h1 id="practice-title">練習</h1>
+        <div class="lang" role="group" aria-label="語言">
+          <button type="button" id="lang-zh" aria-pressed="true">中</button>
+          <button type="button" id="lang-en" aria-pressed="false">EN</button>
+        </div>
+      </header>
+
+      <section class="panel" id="screen-disclaimer">
+        <h2 id="disclaimer-title">練習前請注意</h2>
+        <p id="disclaimer-body"></p>
+        <div class="actions">
+          <button type="button" class="secondary" id="disclaimer-skip">跳過</button>
+          <button type="button" class="primary" id="disclaimer-accept">我了解了</button>
+        </div>
+      </section>
+
+      <section class="panel" id="screen-choose" hidden>
+        <h2 id="choose-title">選擇練習方式</h2>
+        <div class="mode-list">
+          <button type="button" class="mode-option" id="mode-segment" aria-pressed="true">
+            <span class="mode-label">練這一段</span>
+            <span class="tag" id="segment-recommend"></span>
+          </button>
+          <button type="button" class="mode-option" id="mode-full" aria-pressed="false">
+            <span class="mode-label">連續練完整套</span>
+          </button>
+        </div>
+        <div class="actions">
+          <button type="button" class="primary" id="begin">開始</button>
+        </div>
+      </section>
+
+      <section class="panel" id="screen-active" hidden>
+        <div class="guide-stage" aria-hidden="true">
+          <div class="guide-figure" id="guide-figure" data-phase="prep"></div>
+        </div>
+        <div class="progress-track" aria-label="進度">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="phase-row">
+          <strong id="segment-label"></strong>
+          <span id="phase-label"></span>
+          <span id="breath-label"></span>
+        </div>
+        <p id="cue-label"></p>
+
+        <div class="camera-box">
+          <p id="camera-hint"></p>
+          <button type="button" class="secondary" id="camera-toggle">一鍵開啟本地攝像頭</button>
+          <video id="camera-preview" class="camera-preview" playsinline muted></video>
+          <p class="pose-readout" id="pose-readout"></p>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="secondary" id="interrupt">中斷本次</button>
+          <button type="button" class="primary" id="finish">完成</button>
+        </div>
+      </section>
+
+      <section class="panel" id="screen-done" hidden>
+        <h2 id="done-title">本輪結束</h2>
+        <div class="stats-row">
+          <div class="stat">
+            <span id="stat-today-label">今日時長</span>
+            <strong id="today-duration">0</strong>
+          </div>
+          <div class="stat">
+            <span id="stat-interrupt-label">中斷次數</span>
+            <strong id="interrupt-count">0</strong>
+          </div>
+        </div>
+        <div class="card-result" id="card-result"></div>
+        <div class="actions">
+          <button type="button" class="secondary" id="download-card">下載圖片</button>
+          <a class="primary" id="back-home" href="./index.html">回桌寵</a>
+        </div>
+      </section>
+    </div>
+    <script type="module">
+      import { bootPractice } from "./js/ui/practice.js";
+      bootPractice(document);
+    </script>
+  </body>
+</html>

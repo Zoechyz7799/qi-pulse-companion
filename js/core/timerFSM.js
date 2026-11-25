@@ -1,10 +1,21 @@
 /**
- * Wall-clock pomodoro state machine.
- * Remaining time is derived from startedAt, so a hidden tab does not pause it.
- * This module does not touch the DOM, notifications, or speech.
+ * Wall-clock pomodoro FSM. No DOM, notifications, or speech.
+ * Remaining time is derived from startedAt so a hidden tab does not pause.
  */
 
-import { PHASE } from "./tracking-config.js";
+export const TIMER_PHASE = Object.freeze({
+  idle: "idle",
+  running: "running",
+  alert: "alert",
+});
+
+export const TIMER_PRESETS = Object.freeze([
+  Object.freeze({ id: "25", ms: 25 * 60 * 1000, labelKey: "min25" }),
+  Object.freeze({ id: "45", ms: 45 * 60 * 1000, labelKey: "min45" }),
+  Object.freeze({ id: "demo", ms: 10 * 1000, labelKey: "demo" }),
+]);
+
+export const DEFAULT_TIMER_PRESET_ID = "25";
 
 export function formatClock(ms) {
   const total = Math.max(0, Math.ceil(Number(ms) / 1000));
@@ -13,23 +24,27 @@ export function formatClock(ms) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function createTracker(options = {}) {
+export function presetById(id) {
+  return TIMER_PRESETS.find((preset) => preset.id === id) ?? TIMER_PRESETS[0];
+}
+
+export function createTimerFSM(options = {}) {
   const now = options.now ?? (() => Date.now());
   let snapshot = {
-    phase: PHASE.idle,
-    presetId: null,
-    durationMs: 0,
+    phase: TIMER_PHASE.idle,
+    presetId: DEFAULT_TIMER_PRESET_ID,
+    durationMs: presetById(DEFAULT_TIMER_PRESET_ID).ms,
     startedAt: null,
   };
 
   function remainingMs(at) {
-    if (snapshot.phase !== PHASE.running || snapshot.startedAt == null) return 0;
+    if (snapshot.phase !== TIMER_PHASE.running || snapshot.startedAt == null) return 0;
     return Math.max(0, snapshot.durationMs - (at - snapshot.startedAt));
   }
 
   function displayMs(at) {
-    if (snapshot.phase === PHASE.running) return remainingMs(at);
-    if (snapshot.phase === PHASE.alert) return 0;
+    if (snapshot.phase === TIMER_PHASE.running) return remainingMs(at);
+    if (snapshot.phase === TIMER_PHASE.alert) return 0;
     return snapshot.durationMs;
   }
 
@@ -39,14 +54,14 @@ export function createTracker(options = {}) {
       presetId: snapshot.presetId,
       durationMs: snapshot.durationMs,
       startedAt: snapshot.startedAt,
-      remainingMs: snapshot.phase === PHASE.running ? remainingMs(at) : 0,
+      remainingMs: snapshot.phase === TIMER_PHASE.running ? remainingMs(at) : 0,
       displayMs: displayMs(at),
     };
   }
 
   function rest() {
     snapshot = {
-      phase: PHASE.idle,
+      phase: TIMER_PHASE.idle,
       presetId: snapshot.presetId,
       durationMs: snapshot.durationMs,
       startedAt: null,
@@ -60,9 +75,9 @@ export function createTracker(options = {}) {
     },
 
     arm(preset) {
-      if (snapshot.phase !== PHASE.idle) return { ok: false, state: view() };
+      if (snapshot.phase !== TIMER_PHASE.idle) return { ok: false, state: view() };
       snapshot = {
-        phase: PHASE.idle,
+        phase: TIMER_PHASE.idle,
         presetId: preset.id,
         durationMs: preset.ms,
         startedAt: null,
@@ -72,7 +87,7 @@ export function createTracker(options = {}) {
 
     start(preset, at = now()) {
       snapshot = {
-        phase: PHASE.running,
+        phase: TIMER_PHASE.running,
         presetId: preset.id,
         durationMs: preset.ms,
         startedAt: at,
@@ -89,14 +104,14 @@ export function createTracker(options = {}) {
     },
 
     tick(at = now()) {
-      if (snapshot.phase !== PHASE.running) return null;
+      if (snapshot.phase !== TIMER_PHASE.running) return null;
       if (remainingMs(at) > 0) return null;
-      snapshot = { ...snapshot, phase: PHASE.alert };
+      snapshot = { ...snapshot, phase: TIMER_PHASE.alert };
       return { type: "completed", state: view(at) };
     },
 
     triggerAlert(at = now()) {
-      snapshot = { ...snapshot, phase: PHASE.alert };
+      snapshot = { ...snapshot, phase: TIMER_PHASE.alert };
       return { type: "manual", state: view(at) };
     },
   };

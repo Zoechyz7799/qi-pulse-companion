@@ -1,38 +1,41 @@
 /**
- * Pet clips. Switches Liu Kanshan's animations. Does not know durations.
+ * Liu Kanshan pet presentation. Uses public/poses/* assets.
+ * DOM for the pet only; timer state comes from outside.
  */
 
-import { PHASE } from "./tracking-config.js";
-
-const CLIPS = {
+const CLIPS = Object.freeze({
   idle: "idle.webp",
   sway: "sway.webp",
   sleep: "sleep.webp",
   ball: "ball.webp",
   laptop: "laptop.webp",
   wave: "wave.webp",
-};
+});
 
-const IDLE_CYCLE = [
-  { clip: "idle", hold: 2600 },
-  { clip: "sway", hold: 2600 },
-  { clip: "sleep", hold: 2800 },
-  { clip: "ball", hold: 2600 },
-];
+const IDLE_CYCLE = Object.freeze([
+  Object.freeze({ clip: "idle", hold: 2600 }),
+  Object.freeze({ clip: "sway", hold: 2600 }),
+  Object.freeze({ clip: "sleep", hold: 2800 }),
+  Object.freeze({ clip: "ball", hold: 2600 }),
+]);
 
 function poseUrl(file) {
-  const base = import.meta.env.BASE_URL ?? "./";
-  return `${base}poses/${file}`;
+  return `./public/poses/${file}`;
 }
 
-export function createPoseWorker(rig) {
+/**
+ * @param {HTMLElement} rig
+ */
+export function createPet(rig) {
   const image = rig.querySelector(".pet-img");
-  let phase = PHASE.idle;
+  let phase = "idle";
   let idleIndex = 0;
   let idleTimer = 0;
   let momentTimer = 0;
   let entered = false;
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduce =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   for (const file of Object.values(CLIPS)) {
     const preload = new Image();
@@ -40,7 +43,7 @@ export function createPoseWorker(rig) {
   }
 
   function showClip(name) {
-    const src = poseUrl(CLIPS[name]);
+    const src = poseUrl(CLIPS[name] ?? CLIPS.idle);
     if (image.getAttribute("src") === src) return;
     image.src = src;
   }
@@ -52,7 +55,7 @@ export function createPoseWorker(rig) {
 
   function runIdle() {
     stopIdle();
-    if (phase !== PHASE.idle || momentTimer) return;
+    if (phase !== "idle" || momentTimer) return;
     const step = IDLE_CYCLE[idleIndex % IDLE_CYCLE.length];
     showClip(step.clip);
     idleTimer = window.setTimeout(() => {
@@ -64,13 +67,13 @@ export function createPoseWorker(rig) {
   function applyPhase() {
     rig.dataset.phase = phase;
     if (momentTimer) return;
-    if (phase === PHASE.running) {
+    if (phase === "running") {
       stopIdle();
       rig.classList.remove("is-floating");
       showClip("laptop");
       return;
     }
-    if (phase === PHASE.alert) {
+    if (phase === "alert") {
       stopIdle();
       rig.classList.remove("is-floating");
       showClip("wave");
@@ -99,7 +102,7 @@ export function createPoseWorker(rig) {
   }
 
   function replayAlert() {
-    phase = PHASE.alert;
+    phase = "alert";
     window.clearTimeout(momentTimer);
     momentTimer = 0;
     rig.classList.remove("is-peek");
@@ -115,7 +118,7 @@ export function createPoseWorker(rig) {
   rig.addEventListener("animationend", (event) => {
     if (event.target !== rig || event.animationName !== "crawl-in") return;
     entered = true;
-    if (phase === PHASE.idle) rig.classList.add("is-floating");
+    if (phase === "idle") rig.classList.add("is-floating");
   });
 
   if (reduce) {
