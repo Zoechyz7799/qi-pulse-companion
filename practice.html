@@ -79,8 +79,12 @@
         <div class="camera-box">
           <p id="camera-hint"></p>
           <button type="button" class="secondary" id="camera-toggle">一鍵開啟本地攝像頭</button>
-          <video id="camera-preview" class="camera-preview" playsinline muted></video>
-          <p class="pose-readout" id="pose-readout"></p>
+          <div class="camera-stage" id="camera-stage" hidden>
+            <video id="camera-preview" class="camera-preview" playsinline muted></video>
+            <canvas id="pose-overlay" class="pose-overlay" aria-hidden="true"></canvas>
+          </div>
+          <p class="pose-angle" id="pose-angle" hidden></p>
+          <p class="pose-readout" id="pose-readout" data-status=""></p>
         </div>
 
         <div class="actions">

@@ -55,7 +55,7 @@ const COPY = Object.freeze({
     practiceTitle: "練習",
     disclaimerTitle: "練習前請注意",
     disclaimerBody:
-      "本練習僅供自我放鬆與伸展參考，非醫療建議。如有不適請立即停止並諮詢專業人士。",
+      "本練習僅供自我放鬆與伸展參考，非醫療建議。如有不適請立即停止並諮詢專業人士。\n\n攝像頭畫面僅在本機處理，不會上傳。可隨時關閉。",
     disclaimerSkip: "跳過",
     disclaimerAccept: "我了解了",
     chooseMode: "選擇練習方式",
@@ -83,6 +83,10 @@ const COPY = Object.freeze({
     cameraDenied: "沒有攝像頭權限也沒關係，繼續看圖引導即可。",
     cameraBusy: "攝像頭正被占用。你可以先跟著看山練習。",
     poseMissing: "還沒看到你，慢慢走進畫面就好。",
+    coachOk: "達標",
+    coachAdjust: "再調整",
+    coachUnstable: "請調整位置，讓頭部、肩膀、肘部清晰可見",
+    elbowEstimate: "肘部約 {deg}° · 攝像頭估算",
     interrupt: "中斷本次",
     finish: "完成",
     doneTitle: "本輪結束",
@@ -126,7 +130,7 @@ const COPY = Object.freeze({
     practiceTitle: "Practice",
     disclaimerTitle: "Before you begin",
     disclaimerBody:
-      "This practice is for gentle stretch and relaxation only, not medical advice. Stop if you feel discomfort and seek professional care.",
+      "This practice is for gentle stretch and relaxation only, not medical advice. Stop if you feel discomfort and seek professional care.\n\nThe camera stays on this device. Nothing is uploaded. You can turn it off anytime.",
     disclaimerSkip: "Skip",
     disclaimerAccept: "I understand",
     chooseMode: "Choose a mode",
@@ -154,6 +158,10 @@ const COPY = Object.freeze({
     cameraDenied: "No camera permission needed. Keep following the picture guide.",
     cameraBusy: "Camera is busy. You can still practice with Kanshan.",
     poseMissing: "Can't see you yet — ease into the frame when you're ready.",
+    coachOk: "On target",
+    coachAdjust: "Adjust again",
+    coachUnstable: "Please adjust so your head, shoulders, and elbows are clearly visible",
+    elbowEstimate: "Elbow ~{deg}° · camera estimate",
     interrupt: "Interrupt",
     finish: "Finish",
     doneTitle: "Round complete",
@@ -219,7 +227,7 @@ export function speakText(text, lang = "zh") {
     } else {
       utterance.lang = lang === "en" ? "en-US" : "zh-CN";
     }
-    utterance.rate = lang === "en" ? 0.9 : 0.95;
+    utterance.rate = 0.9;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   } catch {

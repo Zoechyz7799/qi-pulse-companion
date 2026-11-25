@@ -31,7 +31,33 @@ import {
   speakText,
   unlockSpeech,
 } from "../locale.js";
+import { angle as jointAngle } from "../core/coach.js";
 import { createPoseTracker } from "../../pose-worker.js";
+
+/** Kanshan guide clips for 起 / 停 / 收 (+ brief 達標). */
+const KANSHAN_STAGE = Object.freeze({
+  rise: "idle.webp",
+  hold: "sway.webp",
+  close: "wave.webp",
+  done: "ball.webp",
+});
+
+const STICK_BONES = Object.freeze([
+  [11, 12],
+  [11, 13],
+  [13, 15],
+  [12, 14],
+  [14, 16],
+  [11, 23],
+  [12, 24],
+  [23, 24],
+  [23, 25],
+  [25, 27],
+  [24, 26],
+  [26, 28],
+  [0, 11],
+  [0, 12],
+]);
 
 export function bootPractice(root = document) {
   const langZh = root.querySelector("#lang-zh");
@@ -73,7 +99,10 @@ export function bootPractice(root = document) {
 
   const cameraHint = root.querySelector("#camera-hint");
   const cameraToggle = root.querySelector("#camera-toggle");
+  const cameraStage = root.querySelector("#camera-stage");
   const cameraPreview = root.querySelector("#camera-preview");
+  const poseOverlay = root.querySelector("#pose-overlay");
+  const poseAngle = root.querySelector("#pose-angle");
   const poseReadout = root.querySelector("#pose-readout");
 
   const doneTitle = root.querySelector("#done-title");
@@ -92,6 +121,9 @@ export function bootPractice(root = document) {
   let cardPayload = null;
   let tickTimer = 0;
   let activeCheck = "rest";
+  let lastSpokenKey = "";
+  let donePoseUntil = 0;
+  let lastCoachReady = false;
   let activeSet = getSet(loadSelectedSetId());
   let practice = createPracticeFSM({
     set: activeSet,
@@ -109,14 +141,20 @@ export function bootPractice(root = document) {
   const camera = createCameraFSM({
     onStream: async (stream) => {
       cameraPreview.classList.add("is-on");
+      if (cameraStage) cameraStage.hidden = false;
       await poseTracker.attach(stream);
       // Re-apply current move check after a fresh landmarker attach.
       poseTracker.setCheck(activeCheck, "standing");
+      syncOverlaySize();
     },
     onStop: async () => {
       await poseTracker.detach();
       cameraPreview.classList.remove("is-on");
+      if (cameraStage) cameraStage.hidden = true;
+      clearOverlay();
       lastPose = null;
+      lastCoachReady = false;
+      donePoseUntil = 0;
       paintPose();
     },
   });
@@ -146,11 +184,17 @@ export function bootPractice(root = document) {
   });
   beginBtn.addEventListener("click", () => {
     unlockSpeech(lang);
+    lastSpokenKey = "";
+    donePoseUntil = 0;
+    lastCoachReady = false;
     practice.selectMode(selectedMode, practice.getState().segmentIndex);
     practice.begin();
     armTick();
     render();
     speakCue();
+  });
+  window.addEventListener("resize", () => {
+    if (camera.getState().active) syncOverlaySize();
   });
   interruptBtn.addEventListener("click", () => {
     const event = practice.interrupt();
@@ -348,17 +392,23 @@ export function bootPractice(root = document) {
     const seg = state.segment;
     const stageSpec = stageForPhase(seg, state.phase);
     const stage = stageOf(state.phase);
-    const clip = stageSpec?.clip || seg.pose || "idle.webp";
+    const showingDone = Date.now() < donePoseUntil;
+    const clip = showingDone
+      ? KANSHAN_STAGE.done
+      : KANSHAN_STAGE[stage] || stageSpec?.clip || seg.pose || "idle.webp";
     const src = poseUrl(clip);
     if (guidePose.getAttribute("src") !== src) guidePose.src = src;
     guideStage.dataset.phase = state.phase;
-    guideStage.dataset.stage = stage;
+    guideStage.dataset.stage = showingDone ? "done" : stage;
     guideStage.dataset.check = stageSpec?.check || "";
     guideStage.dataset.move = seg.id;
-    guideStage.classList.toggle("is-inhale", stage === "rise");
-    guideStage.classList.toggle("is-exhale", stage === "close");
-    guideStage.classList.toggle("is-natural", stage === "hold");
-    stageBadge.textContent = stageBadgeText(copy, stage);
+    guideStage.classList.toggle("is-inhale", stage === "rise" && !showingDone);
+    guideStage.classList.toggle("is-exhale", stage === "close" && !showingDone);
+    guideStage.classList.toggle("is-natural", stage === "hold" && !showingDone);
+    guideStage.classList.toggle("is-done", showingDone);
+    stageBadge.textContent = showingDone
+      ? getCopy(lang).coachOk
+      : stageBadgeText(copy, stage);
     segmentLabel.textContent = seg.title[lang] || seg.title.zh;
     const cue =
       (stageSpec?.cue && (stageSpec.cue[lang] || stageSpec.cue.zh)) ||
@@ -398,33 +448,161 @@ export function bootPractice(root = document) {
 
   function paintPose() {
     const copy = getCopy(lang);
-    if (!lastPose) {
+    const camOn = camera.getState().active;
+    if (cameraStage) cameraStage.hidden = !camOn;
+    if (!camOn || !lastPose) {
+      clearOverlay();
+      if (poseAngle) {
+        poseAngle.hidden = true;
+        poseAngle.textContent = "";
+      }
       poseReadout.textContent = "";
+      poseReadout.dataset.status = "";
       return;
     }
     if (lastPose.error) {
+      clearOverlay();
+      if (poseAngle) poseAngle.hidden = true;
+      poseReadout.dataset.status = "error";
       poseReadout.textContent = copy.cameraError;
       return;
     }
-    if (!lastPose.detected) {
-      poseReadout.textContent = copy.poseMissing;
-      return;
-    }
+
     const coach = lastPose.coach;
-    if (coach?.message) {
-      const tip =
-        lang === "en" ? coachTipEn(coach) : coach.message;
-      const mark = coach.ready ? "✓" : "·";
-      poseReadout.textContent =
-        lang === "en"
-          ? `${mark} ${tip} · ${lastPose.score}%`
-          : `${mark} ${tip} · ${lastPose.score}%`;
+    const unstable =
+      !lastPose.detected ||
+      !lastPose.landmarks ||
+      (coach &&
+        (!coach.tracking ||
+          coach.code === "missing" ||
+          coach.code === "framing" ||
+          coach.code === "geometry"));
+
+    if (unstable) {
+      clearOverlay();
+      if (poseAngle) poseAngle.hidden = true;
+      poseReadout.dataset.status = "unstable";
+      poseReadout.textContent = copy.coachUnstable;
+      lastCoachReady = false;
       return;
     }
-    poseReadout.textContent =
-      lang === "en"
-        ? `Following · ${lastPose.score}%`
-        : `跟著練 · ${lastPose.score}%`;
+
+    drawStickFigure(lastPose.landmarks, coach?.ready);
+    const elbowDeg = estimateElbowDegrees(lastPose.landmarks);
+    if (poseAngle) {
+      if (elbowDeg != null) {
+        poseAngle.hidden = false;
+        poseAngle.textContent = copy.elbowEstimate.replace(
+          "{deg}",
+          String(Math.round(elbowDeg / 5) * 5),
+        );
+      } else {
+        poseAngle.hidden = true;
+        poseAngle.textContent = "";
+      }
+    }
+
+    const ready = Boolean(coach?.ready);
+    if (ready && !lastCoachReady) {
+      donePoseUntil = Date.now() + 1400;
+      const state = practice.getState();
+      if (state.screen === PRACTICE_SCREEN.active) {
+        paintGuide(state, copy);
+      }
+    }
+    lastCoachReady = ready;
+
+    const tip = ready
+      ? copy.coachOk
+      : coach?.message
+        ? lang === "en"
+          ? coachTipEn(coach)
+          : coach.message
+        : copy.coachAdjust;
+    poseReadout.dataset.status = ready ? "ok" : "adjust";
+    poseReadout.textContent = ready
+      ? `✓ ${tip}`
+      : `· ${tip}`;
+  }
+
+  function syncOverlaySize() {
+    if (!poseOverlay || !cameraPreview) return;
+    const w = cameraPreview.clientWidth || cameraPreview.videoWidth || 640;
+    const h = cameraPreview.clientHeight || cameraPreview.videoHeight || 360;
+    if (poseOverlay.width !== w) poseOverlay.width = w;
+    if (poseOverlay.height !== h) poseOverlay.height = h;
+  }
+
+  function clearOverlay() {
+    if (!poseOverlay) return;
+    const ctx = poseOverlay.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, poseOverlay.width, poseOverlay.height);
+  }
+
+  function drawStickFigure(landmarks, ready) {
+    if (!poseOverlay || !landmarks) return;
+    syncOverlaySize();
+    const ctx = poseOverlay.getContext("2d");
+    if (!ctx) return;
+    const w = poseOverlay.width;
+    const h = poseOverlay.height;
+    ctx.clearRect(0, 0, w, h);
+    const color = ready ? "#2f6f5e" : "#c4a574";
+    ctx.lineWidth = Math.max(2, w * 0.008);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const pt = (id) => {
+      const p = landmarks[id];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+      // Mirror for selfie preview.
+      return { x: (1 - p.x) * w, y: p.y * h };
+    };
+
+    for (const [a, b] of STICK_BONES) {
+      const pa = pt(a);
+      const pb = pt(b);
+      if (!pa || !pb) continue;
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+    }
+    for (const id of [0, 11, 12, 13, 14, 15, 16, 23, 24]) {
+      const p = pt(id);
+      if (!p) continue;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(3, w * 0.012), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function estimateElbowDegrees(landmarks) {
+    if (!landmarks) return null;
+    const aspect =
+      cameraPreview.videoWidth && cameraPreview.videoHeight
+        ? cameraPreview.videoWidth / cameraPreview.videoHeight
+        : 4 / 3;
+    const scaled = (p) =>
+      p && Number.isFinite(p.x) && Number.isFinite(p.y)
+        ? { x: p.x * aspect, y: p.y }
+        : null;
+    const left = jointAngle(
+      scaled(landmarks[11]),
+      scaled(landmarks[13]),
+      scaled(landmarks[15]),
+    );
+    const right = jointAngle(
+      scaled(landmarks[12]),
+      scaled(landmarks[14]),
+      scaled(landmarks[16]),
+    );
+    const vals = [left, right].filter((n) => Number.isFinite(n));
+    if (!vals.length) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
   }
 
   function paintCardResult(copy) {
@@ -491,18 +669,15 @@ export function bootPractice(root = document) {
     }
     const copy = getCopy(lang);
     const stage = stageOf(state.phase);
-    const stageSpec = stageForPhase(state.segment, state.phase);
+    // Speak only when Rise/Hold/Close (or segment) changes — no per-frame spam.
+    // hold + breathe both map to Hold, so they share one spoken key.
+    const key = `${state.segmentIndex}|${stage}|${lang}`;
+    if (key === lastSpokenKey) return;
+    lastSpokenKey = key;
     const breath = breathForPhase(state.phase);
-    const title = state.segment.title[lang] || state.segment.title.zh;
     const stageWord = stageBadgeText(copy, stage);
     const breathWord = breath[lang] || breath.zh;
-    const cue =
-      (stageSpec?.cue && (stageSpec.cue[lang] || stageSpec.cue.zh)) ||
-      state.segment.cue[lang] ||
-      state.segment.cue.zh;
-    // Stage (起/停/收) + breath, then short move cue.
-    const text = `${title}. ${stageWord}. ${breathWord}. ${cue}`;
-    speakText(text, lang);
+    speakText(`${stageWord}. ${breathWord}`, lang);
   }
 
   function downloadCard() {
