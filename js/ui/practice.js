@@ -34,29 +34,46 @@ import {
 import { angle as jointAngle } from "../core/coach.js";
 import { createPoseTracker } from "../../pose-worker.js";
 
-/** Kanshan guide clips for 起 / 停 / 收 (+ brief 達標). */
+/** Kanshan guide clips for 起 / 停 / 收 (+ brief done/nod on target). */
 const KANSHAN_STAGE = Object.freeze({
   rise: "idle.webp",
   hold: "sway.webp",
   close: "wave.webp",
-  done: "ball.webp",
+  done: "wave.webp",
 });
 
+/** Fuller body: shoulders–elbows–wrists, torso, hips–knees–ankles (+ neck to nose). */
 const STICK_BONES = Object.freeze([
-  [11, 12],
+  [11, 12], // shoulders
   [11, 13],
-  [13, 15],
+  [13, 15], // left arm
   [12, 14],
-  [14, 16],
+  [14, 16], // right arm
   [11, 23],
-  [12, 24],
-  [23, 24],
+  [12, 24], // torso sides
+  [23, 24], // hips
   [23, 25],
-  [25, 27],
+  [25, 27], // left leg
   [24, 26],
-  [26, 28],
-  [0, 11],
-  [0, 12],
+  [26, 28], // right leg
+  [11, 0],
+  [12, 0], // neck / head anchors
+]);
+
+const STICK_JOINTS = Object.freeze([
+  0, // nose / head center
+  11,
+  12, // shoulders
+  13,
+  14, // elbows
+  15,
+  16, // wrists
+  23,
+  24, // hips
+  25,
+  26, // knees
+  27,
+  28, // ankles
 ]);
 
 export function bootPractice(root = document) {
@@ -127,6 +144,8 @@ export function bootPractice(root = document) {
   let lastSpokenKey = "";
   let donePoseUntil = 0;
   let lastCoachReady = false;
+  let lastNearTarget = false;
+  let audioCtx = null;
   let activeSet = getSet(loadSelectedSetId());
   let practice = createPracticeFSM({
     set: activeSet,
@@ -163,6 +182,7 @@ export function bootPractice(root = document) {
       drawPose(null, false, { clearOnly: true });
       lastPose = null;
       lastCoachReady = false;
+      lastNearTarget = false;
       donePoseUntil = 0;
       paintPose();
     },
@@ -196,6 +216,7 @@ export function bootPractice(root = document) {
     lastSpokenKey = "";
     donePoseUntil = 0;
     lastCoachReady = false;
+    lastNearTarget = false;
     practice.selectMode(selectedMode, practice.getState().segmentIndex);
     practice.begin();
     armTick();
@@ -229,6 +250,16 @@ export function bootPractice(root = document) {
     if (state.active || state.phase === "requesting") {
       await camera.stop();
     } else {
+      // Unlock short beep AudioContext on the same user gesture as camera start.
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) {
+          if (!audioCtx) audioCtx = new AC();
+          void audioCtx.resume();
+        }
+      } catch {
+        /* optional */
+      }
       await camera.start({ video: { facingMode: "user" }, audio: false });
     }
     render();
@@ -493,10 +524,22 @@ export function bootPractice(root = document) {
       lastPose?.detected && Array.isArray(landmarks) && landmarks.length >= 25;
     const coach = lastPose?.coach || null;
     const ready = Boolean(hasLandmarks && coach?.ready);
+    const nearTarget =
+      ready ||
+      Boolean(
+        hasLandmarks &&
+          coach?.tracking &&
+          coach.total > 0 &&
+          coach.passed / coach.total >= 0.85,
+      );
+    const okLabel = lang === "en" ? "Nice" : "達標";
+    const adjustLabel = lang === "en" ? "Adjust again" : "再調整";
 
-    // Always draw: skeleton when landmarks exist; otherwise tip text on canvas.
+    // Always draw: fuller skeleton when landmarks exist; otherwise tip on canvas.
     if (hasLandmarks) {
-      drawPose(landmarks, ready);
+      drawPose(landmarks, ready || nearTarget, {
+        badge: ready ? okLabel : nearTarget ? adjustLabel : "",
+      });
       const elbowDeg = estimateElbowDegrees(landmarks);
       if (poseAngle) {
         if (elbowDeg != null) {
@@ -517,18 +560,21 @@ export function bootPractice(root = document) {
         poseAngle.textContent = "";
       }
       lastCoachReady = false;
+      lastNearTarget = false;
       poseReadout.dataset.status = "unstable";
       poseReadout.textContent = copy.coachUnstable;
       return;
     }
 
-    if (ready && !lastCoachReady) {
-      donePoseUntil = Date.now() + 1400;
+    if (nearTarget && !lastNearTarget) {
+      donePoseUntil = Date.now() + 1600;
       const state = practice.getState();
       if (state.screen === PRACTICE_SCREEN.active) {
         paintGuide(state, copy);
       }
+      if (ready) playTargetBeep();
     }
+    lastNearTarget = nearTarget;
     lastCoachReady = ready;
 
     const framingIssue =
@@ -543,15 +589,13 @@ export function bootPractice(root = document) {
       return;
     }
 
-    const tip = ready
-      ? copy.coachOk
-      : coach?.message
-        ? lang === "en"
-          ? coachTipEn(coach)
-          : coach.message
-        : copy.coachAdjust;
-    poseReadout.dataset.status = ready ? "ok" : "adjust";
-    poseReadout.textContent = ready ? `✓ ${tip}` : `· ${tip}`;
+    if (ready) {
+      poseReadout.dataset.status = "ok";
+      poseReadout.textContent = `✓ ${okLabel}`;
+      return;
+    }
+    poseReadout.dataset.status = "adjust";
+    poseReadout.textContent = `· ${adjustLabel}`;
   }
 
   function ensurePoseCanvasSize() {
@@ -581,7 +625,7 @@ export function bootPractice(root = document) {
   }
 
   /**
-   * Draw stick figure from MediaPipe landmarks, or a tip when missing.
+   * Fuller stick figure from MediaPipe landmarks, or a tip when missing.
    * Never paints the live video frame.
    */
   function drawPose(landmarks, ready = false, options = {}) {
@@ -598,7 +642,7 @@ export function bootPractice(root = document) {
     const list = Array.isArray(landmarks) ? landmarks : null;
     const usable =
       list &&
-      list.length >= 25 &&
+      list.length >= 29 &&
       list[11] &&
       list[12] &&
       Number.isFinite(list[11].x) &&
@@ -617,9 +661,10 @@ export function bootPractice(root = document) {
       return;
     }
 
-    const limb = ready ? "rgba(220, 250, 232, 0.98)" : "rgba(186, 232, 208, 0.92)";
-    const joint = ready ? "#ffffff" : "rgba(245, 255, 250, 0.98)";
-    ctx.lineWidth = Math.max(3, w * 0.012);
+    const limb = ready ? "rgba(240, 210, 120, 0.95)" : "rgba(170, 230, 195, 0.95)";
+    const joint = ready ? "#f5d76e" : "rgba(245, 255, 250, 0.98)";
+    const jointStroke = ready ? "#ffe9a8" : "rgba(200, 240, 220, 0.9)";
+    ctx.lineWidth = Math.max(3.5, w * 0.014);
     ctx.strokeStyle = limb;
     ctx.fillStyle = joint;
     ctx.lineCap = "round";
@@ -632,6 +677,7 @@ export function bootPractice(root = document) {
       return { x: (1 - p.x) * w, y: p.y * h };
     };
 
+    // Clear limbs first.
     for (const [a, b] of STICK_BONES) {
       const pa = pt(a);
       const pb = pt(b);
@@ -641,12 +687,74 @@ export function bootPractice(root = document) {
       ctx.lineTo(pb.x, pb.y);
       ctx.stroke();
     }
-    for (const id of [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26]) {
+
+    // Head circle from nose + ear span when available.
+    const nose = pt(0);
+    if (nose) {
+      const earL = pt(7);
+      const earR = pt(8);
+      let headR = Math.max(10, w * 0.045);
+      if (earL && earR) {
+        headR = Math.max(headR, Math.hypot(earL.x - earR.x, earL.y - earR.y) * 0.55);
+      }
+      ctx.beginPath();
+      ctx.arc(nose.x, nose.y - headR * 0.15, headR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = ready ? "rgba(245, 215, 110, 0.35)" : "rgba(180, 230, 200, 0.2)";
+      ctx.fill();
+      ctx.fillStyle = joint;
+    }
+
+    // Joint dots: head, shoulders, elbows, wrists, hips, knees, ankles.
+    for (const id of STICK_JOINTS) {
       const p = pt(id);
       if (!p) continue;
+      const r =
+        id === 0
+          ? Math.max(5, w * 0.018)
+          : id === 15 || id === 16 || id === 27 || id === 28
+            ? Math.max(4, w * 0.014)
+            : Math.max(5, w * 0.017);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(4, w * 0.016), 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = joint;
       ctx.fill();
+      ctx.lineWidth = Math.max(1.5, w * 0.004);
+      ctx.strokeStyle = jointStroke;
+      ctx.stroke();
+    }
+
+    if (options.badge) {
+      ctx.fillStyle = ready ? "rgba(245, 215, 110, 0.95)" : "rgba(200, 230, 210, 0.9)";
+      ctx.font = `800 ${Math.max(16, Math.round(w * 0.048))}px Nunito, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(options.badge, w / 2, Math.max(10, h * 0.04));
+    }
+  }
+
+  /** Soft chime on 達標 — Web Audio only, no assets. */
+  function playTargetBeep() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx.state === "suspended") void audioCtx.resume();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } catch {
+      /* audio optional */
     }
   }
 
