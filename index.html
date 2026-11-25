@@ -32,6 +32,9 @@
           <div class="presets" id="presets" role="group" aria-label="時長"></div>
           <div class="actions">
             <button type="button" class="primary" id="primary">開始</button>
+            <button type="button" class="secondary" id="alert-practice" hidden>
+              要不要一起伸展一下
+            </button>
           </div>
           <p class="hint" id="hint">點看山進練習；雙擊立刻提醒</p>
         </section>
@@ -53,13 +56,10 @@
       } from "./js/core/timerFSM.js";
       import {
         ENCOURAGEMENTS,
-        cancelSpeech,
         getCopy,
         loadLang,
         pickEncouragement,
         saveLang,
-        speakEnglish,
-        unlockSpeech,
       } from "./js/locale.js";
       import { createPet } from "./js/ui/pet.js";
 
@@ -68,6 +68,7 @@
       const hintEl = document.querySelector("#hint");
       const cheerEl = document.querySelector("#cheer");
       const primaryEl = document.querySelector("#primary");
+      const alertPracticeEl = document.querySelector("#alert-practice");
       const presetsEl = document.querySelector("#presets");
       const shellEl = document.querySelector("#card-shell");
       const toggleEl = document.querySelector("#card-toggle");
@@ -148,7 +149,6 @@
       primaryEl.addEventListener("click", () => {
         const state = timer.getState();
         if (state.phase === TIMER_PHASE.idle) {
-          if (lang === "en") unlockSpeech();
           warmNotify();
           if (!cardOpen) openCard(true);
           const started = timer.start(presetById(selectedId));
@@ -167,6 +167,14 @@
         const dismissed = timer.dismiss();
         quietAlert();
         render(dismissed.state);
+      });
+
+      alertPracticeEl.addEventListener("click", () => {
+        clearTimeout(deadlineTimer);
+        cancelPendingPracticeNav();
+        quietAlert();
+        timer.dismiss();
+        goToPractice();
       });
 
       petEl.addEventListener("click", (event) => {
@@ -200,10 +208,6 @@
         sync();
       });
 
-      window.addEventListener("pagehide", () => {
-        cancelSpeech();
-      });
-
       applyLanguage();
       render(timer.getState());
 
@@ -234,6 +238,8 @@
             : state.phase === TIMER_PHASE.alert
               ? copy.dismiss
               : copy.start;
+        alertPracticeEl.hidden = state.phase !== TIMER_PHASE.alert;
+        alertPracticeEl.textContent = copy.alertPractice;
         paintToggle();
 
         for (const button of presetButtons) {
@@ -254,14 +260,11 @@
         openCard(true);
         pet.replayAlert();
         startFlash(copy);
-        if (lang === "en") speakEnglish(line || copy.alertShort);
-        else cancelSpeech();
         notify(copy, line || copy.alertShort);
       }
 
       function quietAlert() {
         stopFlash();
-        cancelSpeech();
         document.title = formatClock(timer.getState().displayMs);
       }
 
@@ -300,8 +303,6 @@
           startFlash(getCopy(lang));
         }
         render(timer.getState());
-        if (cardOpen && lang === "en") speakEnglish(line);
-        if (lang === "zh") cancelSpeech();
       }
 
       function applyLanguage() {
