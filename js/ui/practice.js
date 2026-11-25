@@ -104,6 +104,7 @@ export function bootPractice(root = document) {
   const poseOverlay = root.querySelector("#pose-overlay");
   const poseAngle = root.querySelector("#pose-angle");
   const poseReadout = root.querySelector("#pose-readout");
+  const cameraPrivacyChip = root.querySelector("#camera-privacy-chip");
 
   const doneTitle = root.querySelector("#done-title");
   const todayDuration = root.querySelector("#today-duration");
@@ -376,6 +377,12 @@ export function bootPractice(root = document) {
 
     cameraToggle.textContent = cam.active ? copy.closeCamera : copy.openCamera;
     cameraHint.textContent = friendlyCameraHint(copy, cam);
+    if (cameraPrivacyChip) {
+      cameraPrivacyChip.textContent =
+        lang === "en"
+          ? "The picture stays on this device. Nothing is uploaded or stored."
+          : "畫面僅在本機處理，不會上傳或儲存。";
+    }
     paintPose();
 
     const today = progress.today;
@@ -526,18 +533,33 @@ export function bootPractice(root = document) {
   }
 
   function syncOverlaySize() {
-    if (!poseOverlay || !cameraPreview) return;
-    const w = cameraPreview.clientWidth || cameraPreview.videoWidth || 640;
-    const h = cameraPreview.clientHeight || cameraPreview.videoHeight || 360;
+    if (!poseOverlay) return;
+    const stageW = cameraStage?.clientWidth || 0;
+    const stageH = cameraStage?.clientHeight || 0;
+    const vw = cameraPreview?.videoWidth || 0;
+    const vh = cameraPreview?.videoHeight || 0;
+    // Prefer stage box (video is visually hidden at 2×2); fall back to stream size.
+    let w = stageW || vw || 640;
+    let h = stageH || vh || 360;
+    if (stageW && vw && vh) {
+      // Match canvas pixel ratio to stream aspect inside the stage.
+      h = Math.round(stageW * (vh / vw));
+      w = stageW;
+    }
     if (poseOverlay.width !== w) poseOverlay.width = w;
     if (poseOverlay.height !== h) poseOverlay.height = h;
+  }
+
+  function fillOverlayBackdrop(ctx, w, h) {
+    ctx.fillStyle = "#15201c";
+    ctx.fillRect(0, 0, w, h);
   }
 
   function clearOverlay() {
     if (!poseOverlay) return;
     const ctx = poseOverlay.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, poseOverlay.width, poseOverlay.height);
+    fillOverlayBackdrop(ctx, poseOverlay.width || 640, poseOverlay.height || 360);
   }
 
   function drawStickFigure(landmarks, ready) {
@@ -547,18 +569,23 @@ export function bootPractice(root = document) {
     if (!ctx) return;
     const w = poseOverlay.width;
     const h = poseOverlay.height;
-    ctx.clearRect(0, 0, w, h);
-    const color = ready ? "#2f6f5e" : "#c4a574";
-    ctx.lineWidth = Math.max(2, w * 0.008);
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
+    // Opaque backdrop — never composite the live video underneath.
+    fillOverlayBackdrop(ctx, w, h);
+    // Pale green / white stick figure only (keypoints + limbs).
+    const limb = ready ? "rgba(210, 245, 225, 0.95)" : "rgba(180, 230, 200, 0.88)";
+    const joint = ready ? "#ffffff" : "rgba(236, 252, 244, 0.95)";
+    ctx.lineWidth = Math.max(2.5, w * 0.01);
+    ctx.strokeStyle = limb;
+    ctx.fillStyle = joint;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(120, 200, 160, 0.35)";
+    ctx.shadowBlur = 6;
 
     const pt = (id) => {
       const p = landmarks[id];
       if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
-      // Mirror for selfie preview.
+      // Mirror for selfie facing (matches hidden video transform).
       return { x: (1 - p.x) * w, y: p.y * h };
     };
 
@@ -571,11 +598,12 @@ export function bootPractice(root = document) {
       ctx.lineTo(pb.x, pb.y);
       ctx.stroke();
     }
+    ctx.shadowBlur = 0;
     for (const id of [0, 11, 12, 13, 14, 15, 16, 23, 24]) {
       const p = pt(id);
       if (!p) continue;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(3, w * 0.012), 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, Math.max(3.5, w * 0.014), 0, Math.PI * 2);
       ctx.fill();
     }
   }

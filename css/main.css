@@ -640,17 +640,24 @@ button,
   width: 100%;
   border-radius: 12px;
   overflow: hidden;
-  background: #111;
+  background: #15201c;
   aspect-ratio: 4 / 3;
   max-height: 280px;
 }
 
-.camera-preview {
+/* Keep full decode size for MediaPipe; opacity 0 + opaque canvas = no live image. */
+.camera-preview,
+.camera-preview.is-visually-hidden {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
+  opacity: 0;
+  pointer-events: none;
   transform: scaleX(-1);
+  /* Extra hide for assistive / screenshot edge cases */
+  visibility: hidden;
 }
 
 .pose-overlay {
@@ -658,6 +665,24 @@ button,
   inset: 0;
   width: 100%;
   height: 100%;
+  pointer-events: none;
+  background: #15201c;
+}
+
+.camera-privacy-chip {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  margin: 0;
+  z-index: 2;
+  max-width: calc(100% - 20px);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #e8f5ef;
+  background: rgba(21, 32, 28, 0.82);
+  border: 1px solid rgba(180, 220, 200, 0.28);
   pointer-events: none;
 }
 
