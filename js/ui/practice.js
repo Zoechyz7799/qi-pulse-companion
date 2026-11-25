@@ -101,7 +101,9 @@ export function bootPractice(root = document) {
   const cameraToggle = root.querySelector("#camera-toggle");
   const cameraStage = root.querySelector("#camera-stage");
   const cameraPreview = root.querySelector("#camera-preview");
-  const poseOverlay = root.querySelector("#pose-overlay");
+  // Prefer #poseCanvas; fall back to legacy #pose-overlay.
+  const poseCanvas =
+    root.querySelector("#poseCanvas") || root.querySelector("#pose-overlay");
   const poseAngle = root.querySelector("#pose-angle");
   const poseReadout = root.querySelector("#pose-readout");
   const cameraPrivacyChip = root.querySelector("#camera-privacy-chip");
@@ -142,17 +144,23 @@ export function bootPractice(root = document) {
   const camera = createCameraFSM({
     onStream: async (stream) => {
       cameraPreview.classList.add("is-on");
+      // Keep opacity 0 — do not use visibility:hidden/display:none (stalls decode).
+      cameraPreview.style.opacity = "0";
+      cameraPreview.style.visibility = "visible";
       if (cameraStage) cameraStage.hidden = false;
       await poseTracker.attach(stream);
-      // Re-apply current move check after a fresh landmarker attach.
       poseTracker.setCheck(activeCheck, "standing");
-      syncOverlaySize();
+      // Layout then size canvas; drawPose runs from onPose.
+      requestAnimationFrame(() => {
+        ensurePoseCanvasSize();
+        drawPose(lastPose?.landmarks || null, Boolean(lastPose?.coach?.ready));
+      });
     },
     onStop: async () => {
       await poseTracker.detach();
       cameraPreview.classList.remove("is-on");
       if (cameraStage) cameraStage.hidden = true;
-      clearOverlay();
+      drawPose(null, false, { clearOnly: true });
       lastPose = null;
       lastCoachReady = false;
       donePoseUntil = 0;
@@ -195,7 +203,10 @@ export function bootPractice(root = document) {
     speakCue();
   });
   window.addEventListener("resize", () => {
-    if (camera.getState().active) syncOverlaySize();
+    if (camera.getState().active) {
+      ensurePoseCanvasSize();
+      drawPose(lastPose?.landmarks || null, Boolean(lastPose?.coach?.ready));
+    }
   });
   interruptBtn.addEventListener("click", () => {
     const event = practice.interrupt();
@@ -457,8 +468,8 @@ export function bootPractice(root = document) {
     const copy = getCopy(lang);
     const camOn = camera.getState().active;
     if (cameraStage) cameraStage.hidden = !camOn;
-    if (!camOn || !lastPose) {
-      clearOverlay();
+    if (!camOn) {
+      drawPose(null, false, { clearOnly: true });
       if (poseAngle) {
         poseAngle.hidden = true;
         poseAngle.textContent = "";
@@ -467,49 +478,50 @@ export function bootPractice(root = document) {
       poseReadout.dataset.status = "";
       return;
     }
-    if (lastPose.error) {
-      clearOverlay();
+
+    if (lastPose?.error) {
+      drawPose(null, false, { tip: copy.cameraError });
       if (poseAngle) poseAngle.hidden = true;
       poseReadout.dataset.status = "error";
       poseReadout.textContent = copy.cameraError;
-      return;
-    }
-
-    const coach = lastPose.coach;
-    const unstable =
-      !lastPose.detected ||
-      !lastPose.landmarks ||
-      (coach &&
-        (!coach.tracking ||
-          coach.code === "missing" ||
-          coach.code === "framing" ||
-          coach.code === "geometry"));
-
-    if (unstable) {
-      clearOverlay();
-      if (poseAngle) poseAngle.hidden = true;
-      poseReadout.dataset.status = "unstable";
-      poseReadout.textContent = copy.coachUnstable;
       lastCoachReady = false;
       return;
     }
 
-    drawStickFigure(lastPose.landmarks, coach?.ready);
-    const elbowDeg = estimateElbowDegrees(lastPose.landmarks);
-    if (poseAngle) {
-      if (elbowDeg != null) {
-        poseAngle.hidden = false;
-        poseAngle.textContent = copy.elbowEstimate.replace(
-          "{deg}",
-          String(Math.round(elbowDeg / 5) * 5),
-        );
-      } else {
+    const landmarks = lastPose?.landmarks || null;
+    const hasLandmarks =
+      lastPose?.detected && Array.isArray(landmarks) && landmarks.length >= 25;
+    const coach = lastPose?.coach || null;
+    const ready = Boolean(hasLandmarks && coach?.ready);
+
+    // Always draw: skeleton when landmarks exist; otherwise tip text on canvas.
+    if (hasLandmarks) {
+      drawPose(landmarks, ready);
+      const elbowDeg = estimateElbowDegrees(landmarks);
+      if (poseAngle) {
+        if (elbowDeg != null) {
+          poseAngle.hidden = false;
+          poseAngle.textContent = copy.elbowEstimate.replace(
+            "{deg}",
+            String(Math.round(elbowDeg / 5) * 5),
+          );
+        } else {
+          poseAngle.hidden = true;
+          poseAngle.textContent = "";
+        }
+      }
+    } else {
+      drawPose(null, false, { tip: copy.coachUnstable });
+      if (poseAngle) {
         poseAngle.hidden = true;
         poseAngle.textContent = "";
       }
+      lastCoachReady = false;
+      poseReadout.dataset.status = "unstable";
+      poseReadout.textContent = copy.coachUnstable;
+      return;
     }
 
-    const ready = Boolean(coach?.ready);
     if (ready && !lastCoachReady) {
       donePoseUntil = Date.now() + 1400;
       const state = practice.getState();
@@ -519,6 +531,18 @@ export function bootPractice(root = document) {
     }
     lastCoachReady = ready;
 
+    const framingIssue =
+      coach &&
+      (!coach.tracking ||
+        coach.code === "missing" ||
+        coach.code === "framing" ||
+        coach.code === "geometry");
+    if (framingIssue) {
+      poseReadout.dataset.status = "unstable";
+      poseReadout.textContent = copy.coachUnstable;
+      return;
+    }
+
     const tip = ready
       ? copy.coachOk
       : coach?.message
@@ -527,65 +551,84 @@ export function bootPractice(root = document) {
           : coach.message
         : copy.coachAdjust;
     poseReadout.dataset.status = ready ? "ok" : "adjust";
-    poseReadout.textContent = ready
-      ? `✓ ${tip}`
-      : `· ${tip}`;
+    poseReadout.textContent = ready ? `✓ ${tip}` : `· ${tip}`;
   }
 
-  function syncOverlaySize() {
-    if (!poseOverlay) return;
-    const stageW = cameraStage?.clientWidth || 0;
-    const stageH = cameraStage?.clientHeight || 0;
+  function ensurePoseCanvasSize() {
+    if (!poseCanvas) return { w: 640, h: 480 };
+    const stageW = Math.max(1, cameraStage?.clientWidth || 0);
+    const stageH = Math.max(1, cameraStage?.clientHeight || 0);
     const vw = cameraPreview?.videoWidth || 0;
     const vh = cameraPreview?.videoHeight || 0;
-    // Prefer stage box (video is visually hidden at 2×2); fall back to stream size.
-    let w = stageW || vw || 640;
-    let h = stageH || vh || 360;
-    if (stageW && vw && vh) {
-      // Match canvas pixel ratio to stream aspect inside the stage.
-      h = Math.round(stageW * (vh / vw));
-      w = stageW;
+    let w = 640;
+    let h = 480;
+    if (stageW > 1 && stageH > 1) {
+      w = Math.round(stageW);
+      h = Math.round(stageH);
+    } else if (vw > 0 && vh > 0) {
+      w = vw;
+      h = vh;
     }
-    if (poseOverlay.width !== w) poseOverlay.width = w;
-    if (poseOverlay.height !== h) poseOverlay.height = h;
+    // Cap backing store but keep aspect.
+    const maxW = 960;
+    if (w > maxW) {
+      h = Math.round((h * maxW) / w);
+      w = maxW;
+    }
+    if (poseCanvas.width !== w) poseCanvas.width = w;
+    if (poseCanvas.height !== h) poseCanvas.height = h;
+    return { w, h };
   }
 
-  function fillOverlayBackdrop(ctx, w, h) {
+  /**
+   * Draw stick figure from MediaPipe landmarks, or a tip when missing.
+   * Never paints the live video frame.
+   */
+  function drawPose(landmarks, ready = false, options = {}) {
+    if (!poseCanvas) return;
+    const { w, h } = ensurePoseCanvasSize();
+    const ctx = poseCanvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#15201c";
     ctx.fillRect(0, 0, w, h);
-  }
+    if (options.clearOnly) return;
 
-  function clearOverlay() {
-    if (!poseOverlay) return;
-    const ctx = poseOverlay.getContext("2d");
-    if (!ctx) return;
-    fillOverlayBackdrop(ctx, poseOverlay.width || 640, poseOverlay.height || 360);
-  }
+    const list = Array.isArray(landmarks) ? landmarks : null;
+    const usable =
+      list &&
+      list.length >= 25 &&
+      list[11] &&
+      list[12] &&
+      Number.isFinite(list[11].x) &&
+      Number.isFinite(list[12].x);
 
-  function drawStickFigure(landmarks, ready) {
-    if (!poseOverlay || !landmarks) return;
-    syncOverlaySize();
-    const ctx = poseOverlay.getContext("2d");
-    if (!ctx) return;
-    const w = poseOverlay.width;
-    const h = poseOverlay.height;
-    // Opaque backdrop — never composite the live video underneath.
-    fillOverlayBackdrop(ctx, w, h);
-    // Pale green / white stick figure only (keypoints + limbs).
-    const limb = ready ? "rgba(210, 245, 225, 0.95)" : "rgba(180, 230, 200, 0.88)";
-    const joint = ready ? "#ffffff" : "rgba(236, 252, 244, 0.95)";
-    ctx.lineWidth = Math.max(2.5, w * 0.01);
+    if (!usable) {
+      const tip =
+        options.tip ||
+        getCopy(lang).coachUnstable ||
+        "請調整位置，讓頭部、肩膀、肘部清晰可見";
+      ctx.fillStyle = "rgba(232, 245, 239, 0.92)";
+      ctx.font = `600 ${Math.max(14, Math.round(w * 0.035))}px Nunito, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      wrapCanvasText(ctx, tip, w / 2, h / 2, w * 0.82, Math.max(20, h * 0.06));
+      return;
+    }
+
+    const limb = ready ? "rgba(220, 250, 232, 0.98)" : "rgba(186, 232, 208, 0.92)";
+    const joint = ready ? "#ffffff" : "rgba(245, 255, 250, 0.98)";
+    ctx.lineWidth = Math.max(3, w * 0.012);
     ctx.strokeStyle = limb;
     ctx.fillStyle = joint;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.shadowColor = "rgba(120, 200, 160, 0.35)";
-    ctx.shadowBlur = 6;
 
     const pt = (id) => {
-      const p = landmarks[id];
+      const p = list[id];
       if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
-      // Mirror for selfie facing (matches hidden video transform).
+      // Mirror X to match selfie-facing camera.
       return { x: (1 - p.x) * w, y: p.y * h };
     };
 
@@ -598,14 +641,31 @@ export function bootPractice(root = document) {
       ctx.lineTo(pb.x, pb.y);
       ctx.stroke();
     }
-    ctx.shadowBlur = 0;
-    for (const id of [0, 11, 12, 13, 14, 15, 16, 23, 24]) {
+    for (const id of [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26]) {
       const p = pt(id);
       if (!p) continue;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(3.5, w * 0.014), 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, Math.max(4, w * 0.016), 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  function wrapCanvasText(ctx, text, cx, cy, maxWidth, lineHeight) {
+    const chars = String(text);
+    const lines = [];
+    let line = "";
+    for (const ch of chars) {
+      const test = line + ch;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = ch;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    const startY = cy - ((lines.length - 1) * lineHeight) / 2;
+    lines.forEach((ln, i) => ctx.fillText(ln, cx, startY + i * lineHeight));
   }
 
   function estimateElbowDegrees(landmarks) {

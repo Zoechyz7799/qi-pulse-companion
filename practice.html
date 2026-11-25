@@ -80,15 +80,24 @@
           <p id="camera-hint"></p>
           <button type="button" class="secondary" id="camera-toggle">一鍵開啟本地攝像頭</button>
           <div class="camera-stage" id="camera-stage" hidden>
-            <!-- Video stays playing for MediaPipe but is visually hidden (privacy). -->
+            <!-- Video stays playing for MediaPipe; opacity 0 only (no visibility:hidden — that can stall decode). -->
             <video
               id="camera-preview"
-              class="camera-preview is-visually-hidden"
+              class="camera-preview"
               playsinline
               muted
+              autoplay
               aria-hidden="true"
+              style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;pointer-events:none;transform:scaleX(-1)"
             ></video>
-            <canvas id="pose-overlay" class="pose-overlay" aria-hidden="true"></canvas>
+            <canvas
+              id="poseCanvas"
+              class="pose-overlay"
+              width="640"
+              height="480"
+              aria-hidden="true"
+              style="position:absolute;inset:0;width:100%;height:100%;background:#15201c;pointer-events:none;z-index:1"
+            ></canvas>
             <p class="camera-privacy-chip" id="camera-privacy-chip">畫面僅在本機處理，不會上傳或儲存。</p>
           </div>
           <p class="pose-angle" id="pose-angle" hidden></p>

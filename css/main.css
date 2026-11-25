@@ -645,9 +645,8 @@ button,
   max-height: 280px;
 }
 
-/* Keep full decode size for MediaPipe; opacity 0 + opaque canvas = no live image. */
-.camera-preview,
-.camera-preview.is-visually-hidden {
+/* Opacity 0 only — visibility:hidden / display:none can stall video decode for MediaPipe. */
+.camera-preview {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -656,17 +655,17 @@ button,
   opacity: 0;
   pointer-events: none;
   transform: scaleX(-1);
-  /* Extra hide for assistive / screenshot edge cases */
-  visibility: hidden;
 }
 
-.pose-overlay {
+.pose-overlay,
+#poseCanvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
   background: #15201c;
+  z-index: 1;
 }
 
 .camera-privacy-chip {
